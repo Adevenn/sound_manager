@@ -11,10 +11,20 @@ class AudioPlayerManager extends ChangeNotifier {
   }
 
   late ValueNotifier<PlayerState> state;
-  /*ValueNotifier<PlayerState> get state =>
-      ValueNotifier<PlayerState>(_player.state);*/
   String? path;
   final AudioPlayer _player = AudioPlayer();
+
+  //AudioPlayer get player => _player;
+  final ValueNotifier<Duration> _duration = ValueNotifier<Duration>(
+    Duration.zero,
+  );
+  ValueNotifier<Duration> get duration => _duration;
+  final ValueNotifier<Duration> _position = ValueNotifier<Duration>(
+    Duration.zero,
+  );
+  ValueNotifier<Duration> get position => _position;
+  String get durationText => _duration.value.toString().split('.').first;
+  String get positionText => _position.value.toString().split('.').first;
 
   bool get canPlay => path != null;
   bool get isLoop => _player.releaseMode == ReleaseMode.loop;
@@ -23,13 +33,30 @@ class AudioPlayerManager extends ChangeNotifier {
   bool get isPlaying => state.value == PlayerState.playing;
   bool get isStop => state.value == PlayerState.stopped;
 
+  AudioPlayerManager([this.path]) {
+    state = ValueNotifier(PlayerState.stopped);
+    setStreams();
+  }
+
+  void setStreams() {
+    _player.onDurationChanged.listen((duration) => _duration.value = duration);
+    _player.onPositionChanged.listen((p) => _position.value = p);
+    _player.onPlayerComplete.listen(
+      (event) => () {
+        state.value = PlayerState.stopped;
+        _position.value = Duration.zero;
+      },
+    );
+    _player.onPlayerStateChanged.listen((newState) => state.value = newState);
+  }
+
+  void seek(double position) {
+    _player.seek(Duration(milliseconds: position.round()));
+  }
+
   void _changeState(PlayerState newState) {
     state.value = newState;
     notifyListeners();
-  }
-
-  AudioPlayerManager([this.path]) {
-    state = ValueNotifier(PlayerState.stopped);
   }
 
   void fromFile(String path) async =>

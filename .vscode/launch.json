@@ -4,23 +4,25 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
-        
         {
             "name": "sound_manager",
             "request": "launch",
-            "type": "dart"
+            "type": "dart",
+            "program": "lib/controller/main.dart"
         },
         {
             "name": "sound_manager (profile mode)",
             "request": "launch",
             "type": "dart",
-            "flutterMode": "profile"
+            "flutterMode": "profile",
+            "program": "lib/controller/main.dart"
         },
         {
             "name": "sound_manager (release mode)",
             "request": "launch",
             "type": "dart",
-            "flutterMode": "release"
+            "flutterMode": "release",
+            "program": "lib/controller/main.dart"
         }
     ]
 }
