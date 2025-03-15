@@ -11,9 +11,9 @@ class AudioPlayerManager {
     _player.setVolume(_volume.value);
   }
 
-  late ValueNotifier<PlayerState> _state;
+  late final ValueNotifier<PlayerState> _state;
   ValueNotifier<PlayerState> get state => _state;
-  late ValueNotifier<String?> _path;
+  late final ValueNotifier<String?> _path;
   ValueNotifier<String?> get path => _path;
   final ValueNotifier<Duration> _duration = ValueNotifier<Duration>(
     Duration.zero,
@@ -51,12 +51,10 @@ class AudioPlayerManager {
   void _setStreams() {
     _player.onDurationChanged.listen((duration) => _duration.value = duration);
     _player.onPositionChanged.listen((p) => _position.value = p);
-    _player.onPlayerComplete.listen(
-      (event) => () {
-        _position.value = Duration.zero;
-        _state.value = PlayerState.completed;
-      },
-    );
+    _player.onPlayerComplete.listen((_) {
+      _position.value = Duration.zero;
+      _state.value = PlayerState.completed;
+    });
     _player.onPlayerStateChanged.listen((newState) => _state.value = newState);
   }
 
