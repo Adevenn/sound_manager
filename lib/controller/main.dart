@@ -30,15 +30,6 @@ class _SoundManagerScreenState extends State<SoundManagerScreen> {
   final musiquePlayer = AudioPlayerManager();
   final bruitagesPlayer = AudioPlayerManager();
 
-  Future<void> pickFile(Function(String) onFilePicked) async {
-    FilePickerResult? result = await FilePicker.platform.pickFiles(
-      type: FileType.audio,
-    );
-    if (result != null && result.files.single.path != null) {
-      onFilePicked(result.files.single.path!);
-    }
-  }
-
   void stopAll() {
     ambiancePlayer.stop();
     musiquePlayer.stop();
@@ -53,139 +44,160 @@ class _SoundManagerScreenState extends State<SoundManagerScreen> {
     super.dispose();
   }
 
-  Widget buildSoundControl(
-    String label,
-    AudioPlayerManager player,
-    Function(String) onFilePicked,
-  ) => Card(
-    child: Padding(
-      padding: const EdgeInsets.all(8.0),
-      child: Column(
-        children: [
-          Text(
-            label,
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          Text(
-            player.path ?? "Aucun fichier sélectionné",
-            style: TextStyle(fontSize: 14, color: Colors.grey),
-          ),
-          ElevatedButton(
-            onPressed: () => pickFile(onFilePicked),
-            child: Text("Sélectionner un fichier"),
-          ),
-
-          ValueListenableBuilder<Duration?>(
-            valueListenable: player.duration,
-            builder:
-                (
-                  BuildContext context,
-                  Duration? duration,
-                  Widget? child,
-                ) => ValueListenableBuilder<Duration?>(
-                  valueListenable: player.position,
-                  builder:
-                      (
-                        BuildContext context,
-                        Duration? position,
-                        Widget? child,
-                      ) => Column(
-                        children: [
-                          Slider(
-                            onChanged: (value) {
-                              if (duration == null) {
-                                return;
-                              }
-                              final position = value * duration.inMilliseconds;
-                              player.seek(position);
-                            },
-                            value:
-                                (position != null &&
-                                        duration != null &&
-                                        position.inMilliseconds > 0 &&
-                                        position.inMilliseconds <
-                                            duration.inMilliseconds)
-                                    ? position.inMilliseconds /
-                                        duration.inMilliseconds
-                                    : 0.0,
-                          ),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              ValueListenableBuilder<double>(
-                                valueListenable: player.volume,
-                                builder:
-                                    (
-                                      BuildContext context,
-                                      double value,
-                                      Widget? child,
-                                    ) => Row(
-                                      mainAxisAlignment: MainAxisAlignment.end,
-                                      children: [
-                                        Icon(
-                                          Icons.volume_down_rounded,
-                                          color: Colors.white60,
-                                        ),
-                                        Slider(
-                                          value: player.volume.value,
-                                          onChanged:
-                                              (value) =>
-                                                  player.setVolume(value),
-                                          min: 0.0,
-                                          max: 1.0,
-                                        ),
-                                      ],
-                                    ),
+  Widget buildSoundControl(String label, AudioPlayerManager player) => Padding(
+    padding: const EdgeInsets.all(8.0),
+    child: Column(
+      spacing: 8,
+      children: [
+        ValueListenableBuilder<String?>(
+          valueListenable: player.path,
+          builder:
+              (BuildContext context, String? path, Widget? child) => Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                spacing: 16,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  ElevatedButton(
+                    onPressed: () => player.pickFile(),
+                    child: Text(path ?? "Aucun fichier sélectionné"),
+                  ),
+                ],
+              ),
+        ),
+        ValueListenableBuilder<String?>(
+          valueListenable: player.path,
+          builder:
+              (BuildContext context, String? path, Widget? child) =>
+                  ValueListenableBuilder<PlayerState>(
+                    valueListenable: player.state,
+                    builder:
+                        (
+                          BuildContext context,
+                          PlayerState state,
+                          Widget? child,
+                        ) => Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            IconButton(
+                              icon: Icon(
+                                path != null
+                                    ? player.isPlaying
+                                        ? Icons.pause_rounded
+                                        : Icons.play_arrow_rounded
+                                    : Icons.play_disabled_rounded,
+                                size: 40,
                               ),
-                              Text(
-                                position != null
-                                    ? '${player.positionText} / ${player.durationText}'
-                                    : duration != null
-                                    ? player.durationText
-                                    : '',
-                                style: const TextStyle(fontSize: 16.0),
+                              onPressed:
+                                  path != null
+                                      ? () async =>
+                                          player.isPlaying
+                                              ? await player.pause()
+                                              : await player.play()
+                                      : null,
+                            ),
+                            IconButton(
+                              icon: Icon(Icons.stop_rounded, size: 40),
+                              onPressed:
+                                  player.isPlaying || player.isPause
+                                      ? () => player.stop()
+                                      : null,
+                            ),
+                          ],
+                        ),
+                  ),
+        ),
+        ValueListenableBuilder<Duration?>(
+          valueListenable: player.duration,
+          builder:
+              (
+                BuildContext context,
+                Duration? duration,
+                Widget? child,
+              ) => ValueListenableBuilder<Duration?>(
+                valueListenable: player.position,
+                builder:
+                    (
+                      BuildContext context,
+                      Duration? position,
+                      Widget? child,
+                    ) => Column(
+                      children: [
+                        Row(
+                          children: [
+                            Text(
+                              position.toString().split('.').first,
+                              style: const TextStyle(fontSize: 16.0),
+                            ),
+                            Expanded(
+                              child: Slider(
+                                onChanged: (value) {
+                                  if (duration == null) {
+                                    return;
+                                  }
+                                  final position =
+                                      value * duration.inMilliseconds;
+                                  player.seek(position);
+                                },
+                                value:
+                                    (position != null &&
+                                            duration != null &&
+                                            position.inMilliseconds > 0 &&
+                                            position.inMilliseconds <
+                                                duration.inMilliseconds)
+                                        ? position.inMilliseconds /
+                                            duration.inMilliseconds
+                                        : 0.0,
                               ),
-                            ],
-                          ),
-                        ],
-                      ),
-                ),
-          ),
-          ValueListenableBuilder<PlayerState>(
-            valueListenable: player.state,
-            builder:
-                (BuildContext context, PlayerState value, Widget? child) => Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    IconButton(
-                      icon: Icon(
-                        player.canPlay
-                            ? player.isPause || player.isStop
-                                ? Icons.play_arrow_rounded
-                                : Icons.pause_rounded
-                            : Icons.play_disabled_rounded,
-                        size: 40,
-                      ),
-                      onPressed:
-                          player.canPlay
-                              ? () async =>
-                                  player.isPlaying
-                                      ? await player.pause()
-                                      : await player.play()
-                              : null,
+                            ),
+                            Text(
+                              duration.toString().split('.').first,
+                              style: const TextStyle(fontSize: 16.0),
+                            ),
+                          ],
+                        ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            ValueListenableBuilder<double>(
+                              valueListenable: player.volume,
+                              builder:
+                                  (
+                                    BuildContext context,
+                                    double volume,
+                                    Widget? child,
+                                  ) => Row(
+                                    mainAxisAlignment: MainAxisAlignment.end,
+                                    children: [
+                                      Icon(
+                                        switch (volume) {
+                                          0 => Icons.volume_off_rounded,
+                                          < 0.3 => Icons.volume_mute_rounded,
+                                          < 0.6 => Icons.volume_down_rounded,
+                                          _ => Icons.volume_up_rounded,
+                                        },
+                                        color: Colors.white60,
+                                        size: 30,
+                                      ),
+                                      Slider(
+                                        value: volume,
+                                        onChanged:
+                                            (value) => player.setVolume(value),
+                                        min: 0.0,
+                                        max: 1.0,
+                                      ),
+                                    ],
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
-                    IconButton(
-                      icon: Icon(Icons.stop, size: 40),
-                      onPressed:
-                          player.isPlaying || player.isPause
-                              ? () => player.stop()
-                              : null,
-                    ),
-                  ],
-                ),
-          ),
-        ],
-      ),
+              ),
+        ),
+      ],
     ),
   );
 
@@ -198,21 +210,11 @@ class _SoundManagerScreenState extends State<SoundManagerScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            buildSoundControl(
-              "Ambiance",
-              ambiancePlayer,
-              (p) => setState(() => ambiancePlayer.path = p),
-            ),
-            buildSoundControl(
-              "Musique",
-              musiquePlayer,
-              (p) => setState(() => musiquePlayer.path = p),
-            ),
-            buildSoundControl(
-              "Bruitages",
-              bruitagesPlayer,
-              (p) => setState(() => bruitagesPlayer.path = p),
-            ),
+            buildSoundControl("Ambiance", ambiancePlayer),
+            Divider(),
+            buildSoundControl("Musique", musiquePlayer),
+            Divider(),
+            buildSoundControl("Bruitages", bruitagesPlayer),
             SizedBox(height: 20),
           ],
         ),

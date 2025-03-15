@@ -1,20 +1,20 @@
 import 'package:audioplayers/audioplayers.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
-class AudioPlayerManager extends ChangeNotifier {
+class AudioPlayerManager {
+  final AudioPlayer _player = AudioPlayer();
   final ValueNotifier<double> _volume = ValueNotifier<double>(1.0);
   ValueNotifier<double> get volume => _volume;
   void setVolume(double newValue) {
     _volume.value = newValue;
     _player.setVolume(_volume.value);
-    notifyListeners();
   }
 
-  late ValueNotifier<PlayerState> state;
-  String? path;
-  final AudioPlayer _player = AudioPlayer();
-
-  //AudioPlayer get player => _player;
+  late ValueNotifier<PlayerState> _state;
+  ValueNotifier<PlayerState> get state => _state;
+  late ValueNotifier<String?> _path;
+  ValueNotifier<String?> get path => _path;
   final ValueNotifier<Duration> _duration = ValueNotifier<Duration>(
     Duration.zero,
   );
@@ -23,52 +23,51 @@ class AudioPlayerManager extends ChangeNotifier {
     Duration.zero,
   );
   ValueNotifier<Duration> get position => _position;
-  String get durationText => _duration.value.toString().split('.').first;
-  String get positionText => _position.value.toString().split('.').first;
 
-  bool get canPlay => path != null;
+  bool get canPlay => _path.value != null;
   bool get isLoop => _player.releaseMode == ReleaseMode.loop;
-  bool get isCompleted => state.value == PlayerState.completed;
-  bool get isPause => state.value == PlayerState.paused;
-  bool get isPlaying => state.value == PlayerState.playing;
-  bool get isStop => state.value == PlayerState.stopped;
+  bool get isCompleted => _state.value == PlayerState.completed;
+  bool get isPause => _state.value == PlayerState.paused;
+  bool get isPlaying => _state.value == PlayerState.playing;
+  bool get isStop => _state.value == PlayerState.stopped;
 
-  AudioPlayerManager([this.path]) {
-    state = ValueNotifier(PlayerState.stopped);
-    setStreams();
+  AudioPlayerManager([String? path]) {
+    _path = ValueNotifier(path);
+    _state = ValueNotifier(PlayerState.stopped);
+    _setStreams();
   }
 
-  void setStreams() {
+  Future<void> pickFile() async {
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.audio,
+    );
+    if (result != null && result.files.single.path != null) {
+      _path.value = result.files.single.path!;
+    }
+    _setStreams();
+    await stop();
+  }
+
+  void _setStreams() {
     _player.onDurationChanged.listen((duration) => _duration.value = duration);
     _player.onPositionChanged.listen((p) => _position.value = p);
     _player.onPlayerComplete.listen(
       (event) => () {
-        state.value = PlayerState.stopped;
         _position.value = Duration.zero;
+        _state.value = PlayerState.completed;
       },
     );
-    _player.onPlayerStateChanged.listen((newState) => state.value = newState);
+    _player.onPlayerStateChanged.listen((newState) => _state.value = newState);
   }
 
-  void seek(double position) {
-    _player.seek(Duration(milliseconds: position.round()));
-  }
+  void seek(double position) =>
+      _player.seek(Duration(milliseconds: position.round()));
 
-  void _changeState(PlayerState newState) {
-    state.value = newState;
-    notifyListeners();
-  }
-
-  void fromFile(String path) async =>
-      await _player.setSource(DeviceFileSource(path));
+  void _changeState(PlayerState newState) => _state.value = newState;
 
   void fromURL(String url) async => await _player.setSource(UrlSource(url));
 
-  @override
-  void dispose() {
-    super.dispose();
-    _player.dispose();
-  }
+  void dispose() => _player.dispose();
 
   Future<void> pause() async {
     await _player.pause();
@@ -76,9 +75,9 @@ class AudioPlayerManager extends ChangeNotifier {
   }
 
   Future<void> play() async {
-    if (path == null) return;
+    if (_path.value == null) return;
     try {
-      await _player.setSource(DeviceFileSource(path!));
+      await _player.setSource(DeviceFileSource(_path.value!));
       await _player.resume();
       _changeState(PlayerState.playing);
     } catch (e) {
@@ -88,6 +87,7 @@ class AudioPlayerManager extends ChangeNotifier {
 
   Future<void> stop() async {
     await _player.stop();
+    _position.value = Duration.zero;
     _changeState(PlayerState.stopped);
   }
 }
