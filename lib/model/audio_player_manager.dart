@@ -11,6 +11,12 @@ class AudioPlayerManager {
     _player.setVolume(_volume.value);
   }
 
+  final ValueNotifier<bool> isMuted = ValueNotifier(false);
+  void switchIsMuted() {
+    isMuted.value = !isMuted.value;
+    _player.setVolume(isMuted.value ? 0.0 : _volume.value);
+  }
+
   late final ValueNotifier<PlayerState> _state;
   ValueNotifier<PlayerState> get state => _state;
   late final ValueNotifier<String?> _path;
