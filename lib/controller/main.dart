@@ -59,7 +59,7 @@ class _SoundManagerScreenState extends State<SoundManagerScreen> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
-      title: Text("Gestion des Sons - JDR"),
+      title: Text('RPG Sound Manager'),
       actions: [
         IconButton(onPressed: stopAll, icon: Icon(Icons.stop_rounded)),
       ],
