@@ -1,8 +1,17 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:sound_manager/model.dart';
 import 'package:sound_manager/view/audio_player_widget.dart';
+import 'package:window_size/window_size.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+    setWindowTitle('RPG Sound Manager');
+    setWindowMinSize(const Size(800, 600));
+  }
   runApp(SoundManagerApp());
 }
 
@@ -64,7 +73,7 @@ class _SoundManagerScreenState extends State<SoundManagerScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             SizedBox(
-              height: MediaQuery.sizeOf(context).height / 3.5,
+              height: MediaQuery.sizeOf(context).height / 3.56,
               child: AudioPlayerWidget(
                 name: "Ambiance",
                 player: ambiancePlayer,
@@ -72,12 +81,12 @@ class _SoundManagerScreenState extends State<SoundManagerScreen> {
             ),
             Divider(),
             SizedBox(
-              height: MediaQuery.sizeOf(context).height / 3.5,
+              height: MediaQuery.sizeOf(context).height / 3.56,
               child: AudioPlayerWidget(name: "Musique", player: musiquePlayer),
             ),
             Divider(),
             SizedBox(
-              height: MediaQuery.sizeOf(context).height / 3.5,
+              height: MediaQuery.sizeOf(context).height / 3.56,
               child: AudioPlayerWidget(
                 name: "Bruitages",
                 player: bruitagesPlayer,

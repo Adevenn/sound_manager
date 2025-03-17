@@ -23,6 +23,7 @@ class AudioPlayerWidget extends StatelessWidget {
               width: MediaQuery.sizeOf(context).width / 3.5,
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
+                spacing: 16,
                 children: [
                   Text(
                     name,
@@ -90,44 +91,38 @@ class AudioPlayerWidget extends StatelessWidget {
                             ),
                           ],
                         ),
-                        ValueListenableBuilder<Duration?>(
+                        ValueListenableBuilder<Duration>(
                           valueListenable: player.duration,
                           builder:
                               (
                                 BuildContext context,
-                                Duration? duration,
+                                Duration duration,
                                 Widget? child,
-                              ) => ValueListenableBuilder<Duration?>(
+                              ) => ValueListenableBuilder<Duration>(
                                 valueListenable: player.position,
                                 builder:
                                     (
                                       BuildContext context,
-                                      Duration? position,
+                                      Duration position,
                                       Widget? child,
                                     ) => Row(
                                       children: [
                                         Text(
                                           position.toString().split('.').first,
                                           style: const TextStyle(
-                                            fontSize: 16.0,
+                                            fontSize: 14.0,
                                           ),
                                         ),
                                         Expanded(
                                           child: Slider(
                                             onChanged: (value) {
-                                              if (duration == null) {
-                                                return;
-                                              }
                                               final position =
                                                   value *
                                                   duration.inMilliseconds;
                                               player.seek(position);
                                             },
                                             value:
-                                                (position != null &&
-                                                        duration != null &&
-                                                        position.inMilliseconds >
-                                                            0 &&
+                                                (position.inMilliseconds > 0 &&
                                                         position.inMilliseconds <
                                                             duration
                                                                 .inMilliseconds)
@@ -139,7 +134,7 @@ class AudioPlayerWidget extends StatelessWidget {
                                         Text(
                                           duration.toString().split('.').first,
                                           style: const TextStyle(
-                                            fontSize: 16.0,
+                                            fontSize: 14.0,
                                           ),
                                         ),
                                       ],
