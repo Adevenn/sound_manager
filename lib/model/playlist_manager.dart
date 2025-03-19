@@ -1,8 +1,10 @@
+import 'package:sound_manager/model/playlist.dart';
+
 import '../model.dart';
 
 class PlaylistManager {
-  String name;
-  var player = AudioPlayerManager();
+  final Playlist playlist;
+  final player = AudioPlayerManager('');
 
-  PlaylistManager(this.name);
+  PlaylistManager(String name) : playlist = Playlist(name);
 }

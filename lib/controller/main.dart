@@ -7,7 +7,6 @@ import 'package:window_size/window_size.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
     setWindowTitle('RPG Sound Manager');
     setWindowMinSize(const Size(800, 600));
@@ -34,9 +33,9 @@ class SoundManagerScreen extends StatefulWidget {
 }
 
 class _SoundManagerScreenState extends State<SoundManagerScreen> {
-  final ambiancePlayer = AudioPlayerManager();
-  final musiquePlayer = AudioPlayerManager();
-  final bruitagesPlayer = AudioPlayerManager();
+  final ambiancePlayer = AudioPlayerManager('Ambiance');
+  final musiquePlayer = AudioPlayerManager('Music');
+  final bruitagesPlayer = AudioPlayerManager('Effect');
 
   void stopAll() {
     ambiancePlayer.stop();
@@ -61,7 +60,7 @@ class _SoundManagerScreenState extends State<SoundManagerScreen> {
     appBar: AppBar(
       title: Text('RPG Sound Manager'),
       actions: [
-        IconButton(onPressed: stopAll, icon: Icon(Icons.stop_rounded)),
+        ElevatedButton(onPressed: stopAll, child: Icon(Icons.stop_rounded)),
       ],
       actionsPadding: EdgeInsets.symmetric(horizontal: 8),
     ),
@@ -74,23 +73,17 @@ class _SoundManagerScreenState extends State<SoundManagerScreen> {
           children: [
             SizedBox(
               height: MediaQuery.sizeOf(context).height / 3.56,
-              child: AudioPlayerWidget(
-                name: "Ambiance",
-                player: ambiancePlayer,
-              ),
+              child: AudioPlayerWidget(player: ambiancePlayer),
             ),
             Divider(),
             SizedBox(
               height: MediaQuery.sizeOf(context).height / 3.56,
-              child: AudioPlayerWidget(name: "Musique", player: musiquePlayer),
+              child: AudioPlayerWidget(player: musiquePlayer),
             ),
             Divider(),
             SizedBox(
               height: MediaQuery.sizeOf(context).height / 3.56,
-              child: AudioPlayerWidget(
-                name: "Bruitages",
-                player: bruitagesPlayer,
-              ),
+              child: AudioPlayerWidget(player: bruitagesPlayer),
             ),
           ],
         ),
