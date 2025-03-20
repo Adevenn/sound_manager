@@ -11,6 +11,13 @@
             "program": "lib/controller/main.dart"
         },
         {
+            "name": "sound_manager (debug mode)",
+            "request": "launch",
+            "type": "dart",
+            "flutterMode": "debug",
+            "program": "lib/controller/main.dart"
+        },
+        {
             "name": "sound_manager (profile mode)",
             "request": "launch",
             "type": "dart",

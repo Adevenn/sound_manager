@@ -1,18 +1,21 @@
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:sound_manager/model.dart';
+import 'package:sound_manager/model/playlist.dart';
 import 'package:sound_manager/view/loading.dart';
 import 'package:sound_manager/view/sound_list_widget.dart';
 
 class AudioPlayerWidget extends StatelessWidget {
-  final AudioPlayerManager player;
+  final PlaylistManager manager;
+  AudioPlayerManager get player => manager.player;
+  Playlist get playlist => manager.playlist;
 
-  const AudioPlayerWidget({required this.player, super.key});
+  const AudioPlayerWidget({required this.manager, super.key});
 
   @override
   Widget build(BuildContext context) => FutureBuilder(
-    future: player.loadSettings(),
-    builder: (context, snapshot) {
+    future: manager.loadSettings(),
+    builder: (BuildContext context, snapshot) {
       if (snapshot.hasData ||
           snapshot.connectionState == ConnectionState.done) {
         return Row(
@@ -34,7 +37,7 @@ class AudioPlayerWidget extends StatelessWidget {
                               spacing: 8,
                               children: [
                                 Text(
-                                  player.name,
+                                  player.type.name.capitalize(),
                                   style: TextStyle(
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,
@@ -44,7 +47,11 @@ class AudioPlayerWidget extends StatelessWidget {
                                   onPressed: () async {
                                     var result = await showDialog<double>(
                                       context: context,
-                                      builder: (context) => SoundListWidget(),
+                                      builder:
+                                          (context) => SoundListWidget(
+                                            playlist: playlist,
+                                            player: player,
+                                          ),
                                     );
                                     if (result != null) {}
                                   },
@@ -62,7 +69,7 @@ class AudioPlayerWidget extends StatelessWidget {
                               child: ElevatedButton(
                                 onPressed: () => player.pickFile(),
                                 child: Text(
-                                  path ?? "Aucun fichier sélectionné",
+                                  path ?? "No file selected",
                                   overflow: TextOverflow.ellipsis,
                                   maxLines: 2,
                                 ),

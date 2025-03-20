@@ -9,11 +9,13 @@ class Playlist {
   File? _file;
   List<Soundtrack> sounds = [];
 
+  Playlist(this.name);
+
   Playlist.create(this.name) {
     _save();
   }
 
-  Playlist(this.name) {
+  Playlist.fromFile(this.name) {
     _loadContent();
   }
 
@@ -23,28 +25,28 @@ class Playlist {
 
   Future<Directory> get _directory async {
     final directory = await getApplicationSupportDirectory();
-    return await Directory('${directory.path}/Data/Playlist').create();
+    final directoryData = await Directory('${directory.path}/Data').create();
+    return Directory('${directoryData.path}/Playlist')..createSync();
   }
 
-  void _getFile() => _file ??= File('$_directory/$name')..createSync();
+  Future<void> _getFile() async =>
+      _file ??= File('${(await _directory).path}/$name.json')..createSync();
 
   Future<void> _loadContent() async {
     try {
-      _getFile();
+      await _getFile();
       var content = jsonDecode(_file!.readAsStringSync()) as List;
-      print(content);
       sounds.clear();
       for (var sound in content) {
         sounds.add(Soundtrack.fromJson(sound));
       }
     } catch (e) {
-      print(e);
       Future.error(e);
     }
   }
 
-  void _save() {
-    _getFile();
+  void _save() async {
+    await _getFile();
     _file!.writeAsString(jsonEncode(toJson()));
   }
 

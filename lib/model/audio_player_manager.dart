@@ -1,11 +1,11 @@
 import 'package:audioplayers/audioplayers.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:sound_manager/model/user_settings.dart';
+import 'package:sound_manager/model.dart';
 
 class AudioPlayerManager {
-  final String _name;
-  String get name => _name;
+  final PlayerType _type;
+  PlayerType get type => _type;
   final AudioPlayer _player = AudioPlayer();
   late final ValueNotifier<double> _volume;
   ValueNotifier<double> get volume => _volume;
@@ -29,24 +29,14 @@ class AudioPlayerManager {
   );
   ValueNotifier<Duration> get position => _position;
 
-  AudioPlayerManager(this._name, [String? path]) {
+  AudioPlayerManager(this._type, [String? path]) {
     _path = ValueNotifier(path);
     _state = ValueNotifier(PlayerState.stopped);
     _setStreams();
   }
 
   Future<void> loadSettings() async {
-    switch (name) {
-      case 'Ambiance':
-        _volume = ValueNotifier<double>(await UserSettings.getAmbianceVolume());
-        break;
-      case 'Music':
-        _volume = ValueNotifier<double>(await UserSettings.getMusicVolume());
-        break;
-      case 'Effect':
-        _volume = ValueNotifier<double>(await UserSettings.getEffectVolume());
-        break;
-    }
+    _volume = ValueNotifier<double>(await UserSettings.getPlayerVolume(type));
   }
 
   Future<void> pickFile() async {
@@ -79,17 +69,7 @@ class AudioPlayerManager {
   }
 
   void setVolumeSettings(double value) {
-    switch (name) {
-      case 'Ambiance':
-        UserSettings.setAmbianceVolume(_volume.value);
-        break;
-      case 'Music':
-        UserSettings.setMusicVolume(_volume.value);
-        break;
-      case 'Effect':
-        UserSettings.setEffectVolume(_volume.value);
-        break;
-    }
+    UserSettings.setPlayerVolume(type, _volume.value);
   }
 
   void switchIsMuted() {

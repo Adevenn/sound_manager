@@ -1,65 +1,75 @@
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sound_manager/model.dart';
 
 class UserSettings {
   static late SharedPreferences _prefs;
 
-  static Future<String> getAmbianceDirectory() async {
+  static Future<String?> getPlayerSourceDirectory(PlayerType type) async {
     _prefs = await SharedPreferences.getInstance();
-    return _prefs.getString('ambiance_directory') ?? '';
+    return switch (type) {
+      PlayerType.ambiance => _prefs.getString('ambiance_source_directory'),
+      PlayerType.music => _prefs.getString('music_source_directory'),
+      PlayerType.effect => _prefs.getString('effect_source_directory'),
+    };
   }
 
-  static Future<void> setAmbianceDirectory(String dir) async {
+  static Future<void> setPlayerSourceDirectory(
+    PlayerType type,
+    String dirPath,
+  ) async {
     _prefs = await SharedPreferences.getInstance();
-    _prefs.setString('ambiance_directory', dir);
+    switch (type) {
+      case PlayerType.ambiance:
+        _prefs.setString('ambiance_source_directory', dirPath);
+      case PlayerType.music:
+        _prefs.setString('music_source_directory', dirPath);
+      case PlayerType.effect:
+        _prefs.setString('effect_source_directory', dirPath);
+    }
   }
 
-  static Future<String> getMusicDirectory() async {
+  static Future<double> getPlayerVolume(PlayerType type) async {
     _prefs = await SharedPreferences.getInstance();
-    return _prefs.getString('music_directory') ?? '';
+    return switch (type) {
+      PlayerType.ambiance => _prefs.getDouble('ambiance_volume') ?? 1.0,
+      PlayerType.music => _prefs.getDouble('music_volume') ?? 1.0,
+      PlayerType.effect => _prefs.getDouble('effect_volume') ?? 1.0,
+    };
   }
 
-  static Future<void> setMusicDirectory(String dir) async {
+  static Future<void> setPlayerVolume(PlayerType type, double volume) async {
     _prefs = await SharedPreferences.getInstance();
-    _prefs.setString('music_directory', dir);
+    switch (type) {
+      case PlayerType.ambiance:
+        _prefs.setDouble('ambiance_volume', volume);
+      case PlayerType.music:
+        _prefs.setDouble('music_volume', volume);
+      case PlayerType.effect:
+        _prefs.setDouble('effect_volume', volume);
+    }
   }
 
-  static Future<String> getEffectDirectory() async {
+  static Future<String?> getCurrentPlayerPlaylist(PlayerType type) async {
     _prefs = await SharedPreferences.getInstance();
-    return _prefs.getString('effect_directory') ?? '';
+    return switch (type) {
+      PlayerType.ambiance => _prefs.getString('ambiance_current_playlist'),
+      PlayerType.music => _prefs.getString('music_current_playlist'),
+      PlayerType.effect => _prefs.getString('effect_current_playlist'),
+    };
   }
 
-  static Future<void> setEffectDirectory(String dir) async {
+  static Future<void> setCurrentPlayerPlaylist(
+    PlayerType type,
+    String path,
+  ) async {
     _prefs = await SharedPreferences.getInstance();
-    _prefs.setString('effect_directory', dir);
-  }
-
-  static Future<double> getAmbianceVolume() async {
-    _prefs = await SharedPreferences.getInstance();
-    return _prefs.getDouble('ambiance_volume') ?? 1.0;
-  }
-
-  static Future<void> setAmbianceVolume(double volume) async {
-    _prefs = await SharedPreferences.getInstance();
-    _prefs.setDouble('ambiance_volume', volume);
-  }
-
-  static Future<double> getMusicVolume() async {
-    _prefs = await SharedPreferences.getInstance();
-    return _prefs.getDouble('music_volume') ?? 1.0;
-  }
-
-  static Future<void> setMusicVolume(double volume) async {
-    _prefs = await SharedPreferences.getInstance();
-    _prefs.setDouble('music_volume', volume);
-  }
-
-  static Future<double> getEffectVolume() async {
-    _prefs = await SharedPreferences.getInstance();
-    return _prefs.getDouble('effect_volume') ?? 1.0;
-  }
-
-  static Future<void> setEffectVolume(double volume) async {
-    _prefs = await SharedPreferences.getInstance();
-    _prefs.setDouble('effect_volume', volume);
+    switch (type) {
+      case PlayerType.ambiance:
+        _prefs.setString('ambiance_current_playlist', path);
+      case PlayerType.music:
+        _prefs.setString('music_current_playlist', path);
+      case PlayerType.effect:
+        _prefs.setString('effect_current_playlist', path);
+    }
   }
 }

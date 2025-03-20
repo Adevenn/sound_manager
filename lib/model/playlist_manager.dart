@@ -3,8 +3,22 @@ import 'package:sound_manager/model/playlist.dart';
 import '../model.dart';
 
 class PlaylistManager {
-  final Playlist playlist;
-  final player = AudioPlayerManager('');
+  late Playlist playlist;
+  final AudioPlayerManager player;
 
-  PlaylistManager(String name) : playlist = Playlist(name);
+  PlaylistManager({required PlayerType type})
+    : player = AudioPlayerManager(type);
+
+  void get pause => player.pause();
+
+  void dispose() {
+    player.dispose();
+  }
+
+  Future<void> loadSettings() async {
+    await player.loadSettings();
+    playlist = Playlist(
+      await UserSettings.getCurrentPlayerPlaylist(player.type) ?? 'Custom',
+    );
+  }
 }
