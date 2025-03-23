@@ -19,7 +19,6 @@ class AudioPlayerManager {
   bool get isStop => _state.value == PlayerState.stopped;
   late final ValueNotifier<String?> _path;
   ValueNotifier<String?> get path => _path;
-  bool get canPlay => _path.value != null;
   final ValueNotifier<Duration> _duration = ValueNotifier<Duration>(
     Duration.zero,
   );

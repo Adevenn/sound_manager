@@ -36,15 +36,19 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
                       valueListenable: player.path,
                       builder:
                           (BuildContext context, String? path, Widget? child) =>
-                              (Chip(
-                                label: Text(
-                                  path != null
-                                      ? p.basenameWithoutExtension(path)
-                                      : "No track",
-                                  overflow: TextOverflow.ellipsis,
-                                  maxLines: 2,
-                                ),
-                              )),
+                              Flexible(
+                                child: (Chip(
+                                  label: Text(
+                                    playlist.actualSoundtrack != null
+                                        ? p.basenameWithoutExtension(
+                                          playlist.actualSoundtrack!.source,
+                                        )
+                                        : "No track",
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 2,
+                                  ),
+                                )),
+                              ),
                     ),
                   ),
                   Expanded(
@@ -91,7 +95,7 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
                                             size: 40,
                                           ),
                                           onPressed:
-                                              player.path.value != null
+                                              playlist.actualSoundtrack != null
                                                   ? () async =>
                                                       player.isPlaying
                                                           ? await player.pause()
