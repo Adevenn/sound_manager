@@ -1,91 +1,104 @@
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:sound_manager/model.dart';
-import 'package:sound_manager/model/playlist.dart';
 import 'package:sound_manager/view/loading.dart';
-import 'package:sound_manager/view/sound_list_widget.dart';
+import 'package:sound_manager/view/track_list_screen.dart';
+import 'package:path/path.dart' as p;
 
-class AudioPlayerWidget extends StatelessWidget {
+class AudioPlayerScreen extends StatefulWidget {
   final PlaylistManager manager;
-  AudioPlayerManager get player => manager.player;
-  Playlist get playlist => manager.playlist;
+  const AudioPlayerScreen({required this.manager, super.key});
 
-  const AudioPlayerWidget({required this.manager, super.key});
+  @override
+  State<StatefulWidget> createState() => _AudioPlayerScreenState();
+}
+
+class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
+  PlaylistManager get manager => widget.manager;
+  AudioPlayerManager get player => widget.manager.player;
+  Playlist get playlist => widget.manager.playlist;
 
   @override
   Widget build(BuildContext context) => FutureBuilder(
-    future: manager.loadSettings(),
+    future: widget.manager.loadSettings(),
     builder: (BuildContext context, snapshot) {
       if (snapshot.hasData ||
           snapshot.connectionState == ConnectionState.done) {
         return Row(
           spacing: 16,
           children: [
-            ValueListenableBuilder<String?>(
-              valueListenable: player.path,
-              builder:
-                  (BuildContext context, String? path, Widget? child) =>
-                      SizedBox(
-                        width: MediaQuery.sizeOf(context).width / 3.5,
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          spacing: 16,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              spacing: 8,
-                              children: [
-                                Text(
-                                  player.type.name.capitalize(),
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                  ),
+            SizedBox(
+              width: MediaQuery.sizeOf(context).width / 3.5,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                spacing: 16,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    spacing: 8,
+                    children: [
+                      Text(
+                        player.type.name.capitalize(),
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      ElevatedButton(
+                        onPressed: () async {
+                          var newPlaylist = await showDialog<Playlist>(
+                            context: context,
+                            builder:
+                                (context) => Dialog.fullscreen(
+                                  child: TrackListScreen(manager: manager),
                                 ),
-                                ElevatedButton(
-                                  onPressed: () async {
-                                    var result = await showDialog<double>(
-                                      context: context,
-                                      builder:
-                                          (context) => SoundListWidget(
-                                            playlist: playlist,
-                                            player: player,
-                                          ),
-                                    );
-                                    if (result != null) {}
-                                  },
-                                  child: Image.asset(
-                                    'assets/song_list.png',
-                                    height: 24,
-                                    width: 24,
-                                    color: Colors.white60,
-                                    filterQuality: FilterQuality.medium,
-                                  ),
-                                ),
-                              ],
-                            ),
+                          );
+                          if (newPlaylist != null &&
+                              !playlist.compare(newPlaylist)) {
+                            manager.playlist = newPlaylist;
+                            manager.loadPlaylistInPlayer();
+                            setState(() {});
+                          }
+                        },
+                        child: Image.asset(
+                          'assets/song_list.png',
+                          height: 24,
+                          width: 24,
+                          color: Colors.white60,
+                          filterQuality: FilterQuality.medium,
+                        ),
+                      ),
+                    ],
+                  ),
+                  ValueListenableBuilder<String?>(
+                    valueListenable: player.path,
+                    builder:
+                        (BuildContext context, String? path, Widget? child) =>
                             Flexible(
-                              child: ElevatedButton(
-                                onPressed: () => player.pickFile(),
-                                child: Text(
-                                  path ?? "No file selected",
+                              child: (Chip(
+                                label: Text(
+                                  playlist.actualSoundtrack != null
+                                      ? p.basenameWithoutExtension(
+                                        playlist.actualSoundtrack!.source,
+                                      )
+                                      : "No track",
                                   overflow: TextOverflow.ellipsis,
                                   maxLines: 2,
                                 ),
-                              ),
+                              )),
                             ),
-                          ],
-                        ),
-                      ),
+                  ),
+                ],
+              ),
             ),
             Expanded(
-              child: ValueListenableBuilder<String?>(
-                valueListenable: player.path,
+              child: ValueListenableBuilder<int>(
+                valueListenable: playlist.trackIndex,
                 builder:
                     (
                       BuildContext context,
-                      String? path,
+                      int index,
                       Widget? child,
                     ) => ValueListenableBuilder<PlayerState>(
                       valueListenable: player.state,
@@ -105,11 +118,14 @@ class AudioPlayerWidget extends StatelessWidget {
                                       Icons.skip_previous_rounded,
                                       size: 40,
                                     ),
-                                    onPressed: null,
+                                    onPressed:
+                                        playlist.isPreviousTrack
+                                            ? () => manager.previousTrack()
+                                            : null,
                                   ),
                                   IconButton(
                                     icon: Icon(
-                                      path != null
+                                      playlist.isTracksNotEmpty
                                           ? player.isPlaying
                                               ? Icons.pause_rounded
                                               : Icons.play_arrow_rounded
@@ -117,7 +133,7 @@ class AudioPlayerWidget extends StatelessWidget {
                                       size: 40,
                                     ),
                                     onPressed:
-                                        path != null
+                                        playlist.actualSoundtrack != null
                                             ? () async =>
                                                 player.isPlaying
                                                     ? await player.pause()
@@ -129,7 +145,10 @@ class AudioPlayerWidget extends StatelessWidget {
                                       Icons.skip_next_rounded,
                                       size: 40,
                                     ),
-                                    onPressed: null,
+                                    onPressed:
+                                        playlist.isNextTrack
+                                            ? () => manager.nextTrack()
+                                            : null,
                                   ),
                                 ],
                               ),

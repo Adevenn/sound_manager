@@ -2,9 +2,8 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:sound_manager/model.dart';
-import 'package:sound_manager/view/audio_player_widget.dart';
+import 'package:sound_manager/view/audio_player_screen.dart';
 import 'package:window_size/window_size.dart';
-
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
@@ -73,17 +72,17 @@ class _SoundManagerScreenState extends State<SoundManagerScreen> {
           children: [
             SizedBox(
               height: MediaQuery.sizeOf(context).height / 3.56,
-              child: AudioPlayerWidget(manager: ambiancePlayer),
+              child: AudioPlayerScreen(manager: ambiancePlayer),
             ),
             Divider(),
             SizedBox(
               height: MediaQuery.sizeOf(context).height / 3.56,
-              child: AudioPlayerWidget(manager: musicPlayer),
+              child: AudioPlayerScreen(manager: musicPlayer),
             ),
             Divider(),
             SizedBox(
               height: MediaQuery.sizeOf(context).height / 3.56,
-              child: AudioPlayerWidget(manager: effectPlayer),
+              child: AudioPlayerScreen(manager: effectPlayer),
             ),
           ],
         ),

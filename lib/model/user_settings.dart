@@ -49,27 +49,27 @@ class UserSettings {
     }
   }
 
-  static Future<String?> getCurrentPlayerPlaylist(PlayerType type) async {
+  static Future<String> getCurrentPlaylist(PlayerType type) async {
     _prefs = await SharedPreferences.getInstance();
     return switch (type) {
-      PlayerType.ambiance => _prefs.getString('ambiance_current_playlist'),
-      PlayerType.music => _prefs.getString('music_current_playlist'),
-      PlayerType.effect => _prefs.getString('effect_current_playlist'),
+      PlayerType.ambiance =>
+        _prefs.getString('ambiance_current_playlist') ?? '',
+      PlayerType.music =>
+        _prefs.getString('music_current_playlist') ?? '',
+      PlayerType.effect =>
+        _prefs.getString('effect_current_playlist') ?? '',
     };
   }
 
-  static Future<void> setCurrentPlayerPlaylist(
-    PlayerType type,
-    String path,
-  ) async {
+  static Future<void> setCurrentPlaylist(PlayerType type, Playlist playlist) async {
     _prefs = await SharedPreferences.getInstance();
     switch (type) {
       case PlayerType.ambiance:
-        _prefs.setString('ambiance_current_playlist', path);
+        _prefs.setString('ambiance_current_playlist', playlist.id);
       case PlayerType.music:
-        _prefs.setString('music_current_playlist', path);
+        _prefs.setString('music_current_playlist', playlist.id);
       case PlayerType.effect:
-        _prefs.setString('effect_current_playlist', path);
+        _prefs.setString('effect_current_playlist', playlist.id);
     }
   }
 }

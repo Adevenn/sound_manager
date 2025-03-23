@@ -28,8 +28,9 @@ class AudioPlayerManager {
     Duration.zero,
   );
   ValueNotifier<Duration> get position => _position;
+  final void Function() onTrackEnds;
 
-  AudioPlayerManager(this._type, [String? path]) {
+  AudioPlayerManager(this._type, this.onTrackEnds, [String? path]) {
     _path = ValueNotifier(path);
     _state = ValueNotifier(PlayerState.stopped);
     _setStreams();
@@ -37,6 +38,16 @@ class AudioPlayerManager {
 
   Future<void> loadSettings() async {
     _volume = ValueNotifier<double>(await UserSettings.getPlayerVolume(type));
+  }
+
+  void changeTrack(Soundtrack? track) {
+    if (track != null) {
+      _path.value = track.source;
+      _setStreams();
+      play();
+    } else {
+      path.value = null;
+    }
   }
 
   Future<void> pickFile() async {
@@ -56,6 +67,7 @@ class AudioPlayerManager {
     _player.onPlayerComplete.listen((_) {
       _position.value = Duration.zero;
       _state.value = PlayerState.completed;
+      onTrackEnds();
     });
     _player.onPlayerStateChanged.listen((newState) => _state.value = newState);
   }
