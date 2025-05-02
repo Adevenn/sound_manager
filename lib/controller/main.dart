@@ -2,8 +2,9 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:sound_manager/model.dart';
-import 'package:sound_manager/view/audio_player_screen.dart';
+import 'package:sound_manager/view/widget/audio_player_widget.dart';
 import 'package:window_size/window_size.dart';
+
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
@@ -32,9 +33,9 @@ class SoundManagerScreen extends StatefulWidget {
 }
 
 class _SoundManagerScreenState extends State<SoundManagerScreen> {
-  final ambiancePlayer = PlaylistManager(type: PlayerType.ambiance);
-  final musicPlayer = PlaylistManager(type: PlayerType.music);
-  final effectPlayer = PlaylistManager(type: PlayerType.effect);
+  final ambiancePlayer = AudioPlayerManager(PlayerType.ambiance);
+  final musicPlayer = AudioPlayerManager(PlayerType.music);
+  final effectPlayer = AudioPlayerManager(PlayerType.effect);
 
   void pauseAll() {
     ambiancePlayer.pause;
@@ -50,10 +51,6 @@ class _SoundManagerScreenState extends State<SoundManagerScreen> {
     super.dispose();
   }
 
-  Widget buildPresset() {
-    return Container();
-  }
-
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
@@ -63,7 +60,6 @@ class _SoundManagerScreenState extends State<SoundManagerScreen> {
       ],
       actionsPadding: EdgeInsets.symmetric(horizontal: 8),
     ),
-    drawer: Drawer(child: buildPresset()),
     body: Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8.0),
       child: SingleChildScrollView(
@@ -72,17 +68,20 @@ class _SoundManagerScreenState extends State<SoundManagerScreen> {
           children: [
             SizedBox(
               height: MediaQuery.sizeOf(context).height / 3.56,
-              child: AudioPlayerScreen(manager: ambiancePlayer),
+              child: AudioPlayerWidget(
+                isCompact: false,
+                player: ambiancePlayer,
+              ),
             ),
             Divider(),
             SizedBox(
               height: MediaQuery.sizeOf(context).height / 3.56,
-              child: AudioPlayerScreen(manager: musicPlayer),
+              child: AudioPlayerWidget(isCompact: false, player: musicPlayer),
             ),
             Divider(),
             SizedBox(
               height: MediaQuery.sizeOf(context).height / 3.56,
-              child: AudioPlayerScreen(manager: effectPlayer),
+              child: AudioPlayerWidget(isCompact: false, player: effectPlayer),
             ),
           ],
         ),

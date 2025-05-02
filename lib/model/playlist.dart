@@ -9,12 +9,14 @@ import 'uuid.dart';
 
 class Playlist {
   late final String id;
-  String name;
+  String _name;
+  String get name => _name;
   File? _file;
   final ValueNotifier<List<Soundtrack>> _tracks = ValueNotifier([]);
   ValueNotifier<List<Soundtrack>> get tracks => _tracks;
+  int get length => tracks.value.length;
   ValueNotifier<int> _trackIndex = ValueNotifier(0);
-  bool isLoop = false;
+  bool isPlaylistLoop = false;
   ValueNotifier<int> get trackIndex => _trackIndex;
   bool get isTracksNotEmpty => _tracks.value.isNotEmpty;
   bool get isPreviousTrack => _trackIndex.value > 0;
@@ -26,26 +28,38 @@ class Playlist {
   Soundtrack? get nextSoundtrack =>
       isNextTrack ? _tracks.value[_trackIndex.value + 1] : null;
 
-  Playlist.empty(this.name) : id = '';
+  Playlist.empty(this._name) : id = uuid.v4();
 
-  Playlist._full(
-    this.id,
-    this.name,
-    this._trackIndex,
-    List<Soundtrack> tracks,
-  ) {
-    _tracks.value = List.from(tracks);
+  //Careful, create() is async
+  Playlist.create(this._name) : id = uuid.v4() {
+    _create();
   }
 
-  Playlist.copy(Playlist other)
-    : this._full(other.id, other.name, other._trackIndex, other._tracks.value);
-
-  Playlist.create(this.name) : id = uuid.v4() {
-    create();
+  Future<void> _create() async {
+    _file = File('${(await directory).path}/$name.json')..createSync();
+    _file!.writeAsString(jsonEncode(toJson()));
   }
 
-  Playlist.fromFile(this.name) {
+  //Careful, _loadContent() is async
+  Playlist.fromFile(this._name) {
     _loadContent();
+  }
+
+  ///Loads the file and extract data from the json inside
+  Future<void> _loadContent() async {
+    try {
+      _file = File('${(await directory).path}/$name.json');
+      var json = jsonDecode(_file!.readAsStringSync());
+      id = json['id'];
+      _name = json['name'];
+      _tracks.value.clear();
+      for (var sound in json['sounds']) {
+        _tracks.value.add(Soundtrack.fromJson(sound));
+      }
+      _trackIndex = json['index'];
+    } catch (e) {
+      Future.error(e);
+    }
   }
 
   Map<String, dynamic> toJson() => {
@@ -61,44 +75,20 @@ class Playlist {
     return Directory('${directoryData.path}/Playlist')..createSync();
   }
 
-  Future<void> create() async {
-    _file = File('${(await directory).path}/$name.json')..createSync();
-    _file!.writeAsString(jsonEncode(toJson()));
+  ///Rename the playlist
+  void rename(String newName) {
+    _name = newName;
   }
 
-  void _fromJson() {
-    var json = jsonDecode(_file!.readAsStringSync());
-    id = json['id'];
-    name = json['name'];
-    _tracks.value.clear();
-    for (var sound in json['sounds']) {
-      _tracks.value.add(Soundtrack.fromJson(sound));
-    }
-    _trackIndex = json['index'];
-  }
-
-  Future<void> _loadContent() async {
-    try {
-      _file = File('${(await directory).path}/$name.json');
-      _fromJson();
-    } catch (e) {
-      Future.error(e);
-    }
-  }
-
+  ///Save the playlist in a file
   void save() async {
     _file!.writeAsString(jsonEncode(toJson()));
   }
 
-  void rename(String newName) {
-    name = newName;
-  }
+  void addSoundtrack(String path) =>
+      _tracks.value.add(Soundtrack(path, SoundtrackType.local));
 
-  void delete() {}
-
-  void addSoundtrack(String path) {
-    _tracks.value.add(Soundtrack(path, SoundtrackType.local));
-  }
+  void removeTrack(int index) => _tracks.value.removeAt(index);
 
   void previousTrack() {
     if (isPreviousTrack) {
@@ -110,12 +100,12 @@ class Playlist {
     if (isNextTrack) {
       _trackIndex.value++;
     }
-    if (isLoop) {
+    if (isPlaylistLoop) {
       _trackIndex.value = 0;
     }
   }
 
-  ///Compare 2 playlists. Returns true if identical
+  ///Compare 2 playlists. Returns true if identical.
   bool compare(Playlist other) {
     if (id != other.id ||
         name != other.name ||
@@ -124,8 +114,7 @@ class Playlist {
       return false;
     }
     for (int i = 0; i < _tracks.value.length; i++) {
-      if (_tracks.value[i].source != other._tracks.value[i].source ||
-          _tracks.value[i].type != other._tracks.value[i].type) {
+      if (!_tracks.value[i].compare(other._tracks.value[i])) {
         return false;
       }
     }

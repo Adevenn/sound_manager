@@ -18,4 +18,10 @@ class Soundtrack {
     'source': source,
     'type': type.name,
   };
+
+  ///Compare 2 soundtracks. Returns true if identical.
+  bool compare(Soundtrack other) =>
+      id != other.id || source != other.source || type != other.type
+          ? false
+          : true;
 }

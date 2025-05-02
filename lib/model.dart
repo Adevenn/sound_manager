@@ -2,7 +2,6 @@ library;
 
 export 'model/audio_player_manager.dart';
 export 'model/player_type.enum.dart';
-export 'model/playlist_manager.dart';
 export 'model/playlist.dart';
 export 'model/soundtrack.dart';
 export 'model/soundtrack.enum.dart';

@@ -2,6 +2,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:sound_manager/model.dart';
+import 'package:path/path.dart' as p;
 
 class AudioPlayerManager {
   final PlayerType _type;
@@ -27,9 +28,13 @@ class AudioPlayerManager {
     Duration.zero,
   );
   ValueNotifier<Duration> get position => _position;
-  final void Function() onTrackEnds;
 
-  AudioPlayerManager(this._type, this.onTrackEnds, [String? path]) {
+  //Playlist values
+  late Playlist playlist;
+  String get playlistName => playlist.name;
+  ValueNotifier<List<Soundtrack>> get tracks => playlist.tracks;
+
+  AudioPlayerManager(this._type, [String? path]) {
     _path = ValueNotifier(path);
     _state = ValueNotifier(PlayerState.stopped);
     _setStreams();
@@ -37,6 +42,21 @@ class AudioPlayerManager {
 
   Future<void> loadSettings() async {
     _volume = ValueNotifier<double>(await UserSettings.getPlayerVolume(type));
+    final currentPlaylist = await UserSettings.getCurrentPlaylist(type);
+    playlist =
+        currentPlaylist != ''
+            ? Playlist.fromFile(currentPlaylist)
+            : Playlist.empty('Custom');
+  }
+
+  void previousTrack() {
+    changeTrack(playlist.previousSoundtrack);
+    playlist.previousTrack();
+  }
+
+  void nextTrack() {
+    changeTrack(playlist.nextSoundtrack);
+    playlist.nextTrack();
   }
 
   void changeTrack(Soundtrack? track) {
@@ -46,6 +66,14 @@ class AudioPlayerManager {
       play();
     } else {
       path.value = null;
+    }
+  }
+
+  void addSoundtrack(String path) {
+    playlist.addSoundtrack(path);
+    if (playlist.length == 1) {
+      _path.value = playlist.actualSoundtrack!.source;
+      _setStreams();
     }
   }
 
@@ -60,13 +88,24 @@ class AudioPlayerManager {
     await stop();
   }
 
+  Future<List<String>> _getPlaylists() async {
+    List<String> list = [];
+    final files = (await playlist.directory).listSync();
+    for (var f in files) {
+      if (p.extension(f.path) == '.json') {
+        list.add(f.path);
+      }
+    }
+    return list;
+  }
+
   void _setStreams() {
     _player.onDurationChanged.listen((duration) => _duration.value = duration);
     _player.onPositionChanged.listen((p) => _position.value = p);
     _player.onPlayerComplete.listen((_) {
       _position.value = Duration.zero;
       _state.value = PlayerState.completed;
-      onTrackEnds();
+      nextTrack();
     });
     _player.onPlayerStateChanged.listen((newState) => _state.value = newState);
   }
