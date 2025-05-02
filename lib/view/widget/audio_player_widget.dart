@@ -2,27 +2,17 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:sound_manager/model.dart';
 import 'package:sound_manager/view/loading.dart';
-import 'package:flutter/material.dart';
 import 'package:sound_manager/view/playlist_screen.dart';
-import 'package:path/path.dart' as p;
-
-typedef MenuEntry = DropdownMenuEntry<String>;
 
 class AudioPlayerWidget extends StatefulWidget {
-  final bool isCompact;
   final AudioPlayerManager player;
-  const AudioPlayerWidget({
-    required this.isCompact,
-    required this.player,
-    super.key,
-  });
+  const AudioPlayerWidget({required this.player, super.key});
 
   @override
   State<StatefulWidget> createState() => _AudioPlayerWidgetState();
 }
 
 class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
-  bool get isCompact => widget.isCompact;
   AudioPlayerManager get player => widget.player;
   Playlist get playlist => widget.player.playlist;
 
@@ -137,52 +127,49 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
     builder: (BuildContext context, snapshot) {
       if (snapshot.hasData ||
           snapshot.connectionState == ConnectionState.done) {
-        return SizedBox(
-          height: isCompact ? 120 : null,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              isCompact
-                  ? Divider()
-                  : Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    spacing: 8,
-                    children: [
-                      Text(
-                        player.type.name.capitalize(),
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      ElevatedButton(
-                        onPressed: () async {
-                          var newPlaylist = await showDialog<Playlist>(
-                            context: context,
-                            builder:
-                                (context) => Dialog.fullscreen(
-                                  child: PlaylistScreen(player: player),
-                                ),
-                          );
-                          if (newPlaylist != null &&
-                              !playlist.compare(newPlaylist)) {
-                            player.playlist = newPlaylist;
-                            player.changeTrack(playlist.actualSoundtrack);
-                          }
-                          setState(() {});
-                        },
-                        child: Image.asset(
-                          'assets/song_list.png',
-                          height: 24,
-                          width: 24,
-                          color: Colors.white60,
-                          filterQuality: FilterQuality.medium,
-                        ),
-                      ),
-                    ],
+        return Column(
+          mainAxisAlignment: MainAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                spacing: 8,
+                children: [
+                  Text(
+                    player.type.name.capitalize(),
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                   ),
-              ValueListenableBuilder(
+                  ElevatedButton(
+                    onPressed: () async {
+                      var newPlaylist = await showDialog<Playlist>(
+                        context: context,
+                        builder:
+                            (context) => Dialog.fullscreen(
+                              child: PlaylistScreen(player: player),
+                            ),
+                      );
+                      if (newPlaylist != null &&
+                          !playlist.compare(newPlaylist)) {
+                        player.playlist = newPlaylist;
+                        player.changeTrack(playlist.actualSoundtrack);
+                      }
+                      setState(() {});
+                    },
+                    child: Image.asset(
+                      'assets/song_list.png',
+                      height: 24,
+                      width: 24,
+                      color: Colors.white60,
+                      filterQuality: FilterQuality.medium,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: ValueListenableBuilder(
                 valueListenable: playlist.tracks,
                 builder:
                     (context, value, child) => Row(
@@ -198,31 +185,56 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
                                     BuildContext context,
                                     String? path,
                                     Widget? child,
-                                  ) => DropdownMenu<Soundtrack>(
-                                    onSelected:
-                                        (track) => player.changeTrack(track),
-                                    dropdownMenuEntries: List.from(
-                                      player.tracks.value
-                                          .map<DropdownMenuEntry<Soundtrack>>(
-                                            (track) => DropdownMenuEntry(
-                                              value: track,
-                                              label: p.basenameWithoutExtension(
-                                                track.source,
+                                  ) => SizedBox(
+                                    height:
+                                        MediaQuery.sizeOf(context).height / 3,
+                                    child: player.playlist.isTracksNotEmpty
+                                        ? ListView.separated(
+                                          itemBuilder:
+                                              (
+                                                context,
+                                                index,
+                                              ) => ListTile(
+                                                selected:
+                                                    player
+                                                        .playlist
+                                                        .tracks
+                                                        .value[index]
+                                                        .id ==
+                                                    player
+                                                        .playlist
+                                                        .actualSoundtrack!
+                                                        .id,
+                                                selectedColor:
+                                                    Colors.green[400],
+                                                title: Text(
+                                                  player
+                                                      .tracks
+                                                      .value[index]
+                                                      .name,
+                                    
+                                                  overflow:
+                                                      TextOverflow
+                                                          .ellipsis,
+                                                  maxLines: 2,
+                                                ),
+                                                onTap:
+                                                    () => player
+                                                        .changeTrack(
+                                                          player
+                                                              .playlist
+                                                              .tracks
+                                                              .value[index],
+                                                        ),
                                               ),
-                                            ),
-                                          ),
-                                    ),
-                                  ) /*Chip(
-                                    label: Text(
-                                      playlist.actualSoundtrack != null
-                                          ? p.basenameWithoutExtension(
-                                            playlist.actualSoundtrack!.source,
-                                          )
-                                          : "No track",
-                                      overflow: TextOverflow.ellipsis,
-                                      maxLines: 2,
-                                    ),
-                                  ),*/,
+                                          separatorBuilder:
+                                              (context, index) =>
+                                                  Divider(),
+                                          itemCount:
+                                              player.playlist.length,
+                                        )
+                                        : Center(child: Text("No track")),
+                                  ),
                             ),
                           ),
                         ),
@@ -265,8 +277,8 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
                       ],
                     ),
               ),
-            ],
-          ),
+            ),
+          ],
         );
       } else if (snapshot.hasError &&
           snapshot.connectionState == ConnectionState.done) {

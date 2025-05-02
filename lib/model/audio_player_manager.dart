@@ -10,6 +10,14 @@ class AudioPlayerManager {
   final AudioPlayer _player = AudioPlayer();
   late final ValueNotifier<double> _volume;
   ValueNotifier<double> get volume => _volume;
+  final ValueNotifier<Duration> _duration = ValueNotifier<Duration>(
+    Duration.zero,
+  );
+  ValueNotifier<Duration> get duration => _duration;
+  final ValueNotifier<Duration> _position = ValueNotifier<Duration>(
+    Duration.zero,
+  );
+  ValueNotifier<Duration> get position => _position;
   final ValueNotifier<bool> isMuted = ValueNotifier(false);
   bool get isLoop => _player.releaseMode == ReleaseMode.loop;
   late final ValueNotifier<PlayerState> _state;
@@ -20,19 +28,12 @@ class AudioPlayerManager {
   bool get isStop => _state.value == PlayerState.stopped;
   late final ValueNotifier<String?> _path;
   ValueNotifier<String?> get path => _path;
-  final ValueNotifier<Duration> _duration = ValueNotifier<Duration>(
-    Duration.zero,
-  );
-  ValueNotifier<Duration> get duration => _duration;
-  final ValueNotifier<Duration> _position = ValueNotifier<Duration>(
-    Duration.zero,
-  );
-  ValueNotifier<Duration> get position => _position;
 
   //Playlist values
   late Playlist playlist;
   String get playlistName => playlist.name;
   ValueNotifier<List<Soundtrack>> get tracks => playlist.tracks;
+  int get playlistLength => playlist.length;
 
   AudioPlayerManager(this._type, [String? path]) {
     _path = ValueNotifier(path);
@@ -61,9 +62,14 @@ class AudioPlayerManager {
 
   void changeTrack(Soundtrack? track) {
     if (track != null) {
-      _path.value = track.source;
-      _setStreams();
-      play();
+      for (int i = 0; i < playlist.length; i++) {
+        if (track.id == playlist.tracks.value[i].id) {
+          playlist.changeCurrentTrack(i);
+          _path.value = track.source;
+          _setStreams();
+          play();
+        }
+      }
     } else {
       path.value = null;
     }

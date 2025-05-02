@@ -90,6 +90,8 @@ class Playlist {
 
   void removeTrack(int index) => _tracks.value.removeAt(index);
 
+  void changeCurrentTrack(int index) => trackIndex.value = index;
+
   void previousTrack() {
     if (isPreviousTrack) {
       _trackIndex.value--;

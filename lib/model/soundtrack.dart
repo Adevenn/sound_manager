@@ -1,10 +1,12 @@
 import 'package:sound_manager/model/soundtrack.enum.dart';
+import 'package:path/path.dart' as p;
 
 import 'uuid.dart';
 
 class Soundtrack {
   String id;
   String source;
+  String get name => p.basenameWithoutExtension(source);
   SoundtrackType type;
 
   Soundtrack(this.source, this.type) : id = uuid.v4();

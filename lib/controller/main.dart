@@ -53,13 +53,6 @@ class _SoundManagerScreenState extends State<SoundManagerScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      title: Text('Sound Manager'),
-      actions: [
-        ElevatedButton(onPressed: pauseAll, child: Icon(Icons.pause_rounded)),
-      ],
-      actionsPadding: EdgeInsets.symmetric(horizontal: 8),
-    ),
     body: Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8.0),
       child: SingleChildScrollView(
@@ -67,21 +60,18 @@ class _SoundManagerScreenState extends State<SoundManagerScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             SizedBox(
-              height: MediaQuery.sizeOf(context).height / 3.56,
-              child: AudioPlayerWidget(
-                isCompact: false,
-                player: ambiancePlayer,
-              ),
+              height: MediaQuery.sizeOf(context).height / 2.5,
+              child: AudioPlayerWidget(player: ambiancePlayer),
             ),
             Divider(),
             SizedBox(
-              height: MediaQuery.sizeOf(context).height / 3.56,
-              child: AudioPlayerWidget(isCompact: false, player: musicPlayer),
+              height: MediaQuery.sizeOf(context).height / 2.5,
+              child: AudioPlayerWidget(player: musicPlayer),
             ),
             Divider(),
-            SizedBox(
-              height: MediaQuery.sizeOf(context).height / 3.56,
-              child: AudioPlayerWidget(isCompact: false, player: effectPlayer),
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Text('Effects : WIP'),
             ),
           ],
         ),
