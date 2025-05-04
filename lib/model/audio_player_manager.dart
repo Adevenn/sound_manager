@@ -50,23 +50,31 @@ class AudioPlayerManager {
             : Playlist.empty('Custom');
   }
 
+  void _loadTrack() {
+    if (playlist.actualSoundtrack != null) {
+      _path.value = playlist.actualSoundtrack!.source;
+      _setStreams();
+    }
+  }
+
   void previousTrack() {
-    changeTrack(playlist.previousSoundtrack);
     playlist.previousTrack();
+    _loadTrack();
+    play();
   }
 
   void nextTrack() {
-    changeTrack(playlist.nextSoundtrack);
     playlist.nextTrack();
+    _loadTrack();
+    play();
   }
 
   void changeTrack(Soundtrack? track) {
     if (track != null) {
       for (int i = 0; i < playlist.length; i++) {
         if (track.id == playlist.tracks.value[i].id) {
-          playlist.changeCurrentTrack(i);
-          _path.value = track.source;
-          _setStreams();
+          playlist.changeTrack(i);
+          _loadTrack();
           play();
         }
       }
@@ -78,8 +86,7 @@ class AudioPlayerManager {
   void addSoundtrack(String path) {
     playlist.addSoundtrack(path);
     if (playlist.length == 1) {
-      _path.value = playlist.actualSoundtrack!.source;
-      _setStreams();
+      _loadTrack();
     }
   }
 

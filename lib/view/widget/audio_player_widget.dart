@@ -16,12 +16,12 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
   AudioPlayerManager get player => widget.player;
   Playlist get playlist => widget.player.playlist;
 
-  Widget get previousTrack => IconButton(
+  Widget get _previousTrack => IconButton(
     icon: Icon(Icons.skip_previous_rounded, size: 40),
     onPressed: playlist.isPreviousTrack ? () => player.previousTrack() : null,
   );
 
-  Widget get playPauseButton => IconButton(
+  Widget get _playPauseButton => IconButton(
     icon: Icon(
       playlist.isTracksNotEmpty
           ? player.isPlaying
@@ -38,12 +38,12 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
             : null,
   );
 
-  Widget get nextTrack => IconButton(
+  Widget get _nextTrack => IconButton(
     icon: Icon(Icons.skip_next_rounded, size: 40),
     onPressed: playlist.isNextTrack ? () => player.nextTrack() : null,
   );
 
-  Widget get timer => ValueListenableBuilder<Duration>(
+  Widget get _timer => ValueListenableBuilder<Duration>(
     valueListenable: player.duration,
     builder:
         (BuildContext context, Duration duration, Widget? child) =>
@@ -82,15 +82,29 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
             ),
   );
 
-  Widget get volume => ValueListenableBuilder<double>(
+  Widget get _volume => ValueListenableBuilder<double>(
     valueListenable: player.volume,
     builder:
         (BuildContext context, double volume, Widget? child) =>
             ValueListenableBuilder<bool>(
               valueListenable: player.isMuted,
               builder:
-                  (BuildContext context, bool isMuted, Widget? child) => Row(
+                  (BuildContext context, bool isMuted, Widget? child) => Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
+                      Expanded(
+                        child: RotatedBox(
+                          quarterTurns: 3,
+                          child: Slider(
+                            value: isMuted ? 0.0 : volume,
+                            onChanged: (value) => player.setVolume(value),
+                            onChangeEnd:
+                                (value) => player.setVolumeSettings(value),
+                            min: 0.0,
+                            max: 1.0,
+                          ),
+                        ),
+                      ),
                       IconButton(
                         icon: Icon(
                           isMuted
@@ -105,16 +119,6 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
                         color: Colors.white60,
                         iconSize: 30,
                         onPressed: () => player.switchIsMuted(),
-                      ),
-                      Expanded(
-                        child: Slider(
-                          value: isMuted ? 0.0 : volume,
-                          onChanged: (value) => player.setVolume(value),
-                          onChangeEnd:
-                              (value) => player.setVolumeSettings(value),
-                          min: 0.0,
-                          max: 1.0,
-                        ),
                       ),
                     ],
                   ),
@@ -131,9 +135,9 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
           mainAxisAlignment: MainAxisAlignment.start,
           children: [
             Padding(
-              padding: const EdgeInsets.all(8.0),
+              padding: const EdgeInsets.all(16.0),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisAlignment: MainAxisAlignment.start,
                 crossAxisAlignment: CrossAxisAlignment.center,
                 spacing: 8,
                 children: [
@@ -169,113 +173,95 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
               ),
             ),
             Expanded(
-              child: ValueListenableBuilder(
-                valueListenable: playlist.tracks,
-                builder:
-                    (context, value, child) => Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.all(8.0),
-                            child: ValueListenableBuilder<String?>(
-                              valueListenable: player.path,
-                              builder:
-                                  (
-                                    BuildContext context,
-                                    String? path,
-                                    Widget? child,
-                                  ) => SizedBox(
-                                    height:
-                                        MediaQuery.sizeOf(context).height / 3,
-                                    child: player.playlist.isTracksNotEmpty
-                                        ? ListView.separated(
-                                          itemBuilder:
-                                              (
-                                                context,
-                                                index,
-                                              ) => ListTile(
-                                                selected:
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  Expanded(
+                    flex: 1,
+                    child: Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: ValueListenableBuilder<String?>(
+                        valueListenable: player.path,
+                        builder:
+                            (
+                              BuildContext context,
+                              String? path,
+                              Widget? child,
+                            ) => SizedBox(
+                              height: MediaQuery.sizeOf(context).height / 3,
+                              child:
+                                  player.playlist.isTracksNotEmpty
+                                      ? ListView.separated(
+                                        itemBuilder:
+                                            (context, index) => ListTile(
+                                              selected:
+                                                  player
+                                                      .playlist
+                                                      .tracks
+                                                      .value[index]
+                                                      .id ==
+                                                  player
+                                                      .playlist
+                                                      .actualSoundtrack!
+                                                      .id,
+                                              selectedColor: Colors.green[400],
+                                              title: Text(
+                                                player.tracks.value[index].name,
+                                                style: TextStyle(fontSize: 14),
+                                                overflow: TextOverflow.ellipsis,
+                                                maxLines: 2,
+                                              ),
+                                              onTap:
+                                                  () => player.changeTrack(
                                                     player
                                                         .playlist
                                                         .tracks
-                                                        .value[index]
-                                                        .id ==
-                                                    player
-                                                        .playlist
-                                                        .actualSoundtrack!
-                                                        .id,
-                                                selectedColor:
-                                                    Colors.green[400],
-                                                title: Text(
-                                                  player
-                                                      .tracks
-                                                      .value[index]
-                                                      .name,
-                                    
-                                                  overflow:
-                                                      TextOverflow
-                                                          .ellipsis,
-                                                  maxLines: 2,
-                                                ),
-                                                onTap:
-                                                    () => player
-                                                        .changeTrack(
-                                                          player
-                                                              .playlist
-                                                              .tracks
-                                                              .value[index],
-                                                        ),
-                                              ),
-                                          separatorBuilder:
-                                              (context, index) =>
-                                                  Divider(),
-                                          itemCount:
-                                              player.playlist.length,
-                                        )
-                                        : Center(child: Text("No track")),
-                                  ),
+                                                        .value[index],
+                                                  ),
+                                            ),
+                                        separatorBuilder:
+                                            (context, index) => Divider(),
+                                        itemCount: player.playlist.length,
+                                      )
+                                      : Center(child: Text("No track")),
                             ),
-                          ),
-                        ),
-                        Expanded(
-                          flex: 2,
-                          child: ValueListenableBuilder<int>(
-                            valueListenable: playlist.trackIndex,
-                            builder:
-                                (
-                                  BuildContext context,
-                                  int index,
-                                  Widget? child,
-                                ) => ValueListenableBuilder<PlayerState>(
-                                  valueListenable: player.state,
-                                  builder:
-                                      (
-                                        BuildContext context,
-                                        PlayerState state,
-                                        Widget? child,
-                                      ) => Column(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        children: [
-                                          Row(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.center,
-                                            children: [
-                                              previousTrack,
-                                              playPauseButton,
-                                              nextTrack,
-                                            ],
-                                          ),
-                                          timer,
-                                        ],
-                                      ),
-                                ),
-                          ),
-                        ),
-                        Expanded(child: volume),
-                      ],
+                      ),
                     ),
+                  ),
+                  Expanded(
+                    flex: 3,
+                    child: ValueListenableBuilder<int>(
+                      valueListenable: playlist.trackIndex,
+                      builder:
+                          (BuildContext context, int index, Widget? child) =>
+                              ValueListenableBuilder<PlayerState>(
+                                valueListenable: player.state,
+                                builder:
+                                    (
+                                      BuildContext context,
+                                      PlayerState state,
+                                      Widget? child,
+                                    ) => Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            _previousTrack,
+                                            _playPauseButton,
+                                            _nextTrack,
+                                          ],
+                                        ),
+                                        _timer,
+                                      ],
+                                    ),
+                              ),
+                    ),
+                  ),
+                  Expanded(child: _volume),
+                ],
               ),
             ),
           ],

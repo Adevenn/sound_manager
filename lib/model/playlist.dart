@@ -14,19 +14,15 @@ class Playlist {
   File? _file;
   final ValueNotifier<List<Soundtrack>> _tracks = ValueNotifier([]);
   ValueNotifier<List<Soundtrack>> get tracks => _tracks;
-  int get length => tracks.value.length;
   ValueNotifier<int> _trackIndex = ValueNotifier(0);
-  bool isPlaylistLoop = false;
   ValueNotifier<int> get trackIndex => _trackIndex;
+  int get length => tracks.value.length;
+  bool isPlaylistLoop = false;
   bool get isTracksNotEmpty => _tracks.value.isNotEmpty;
   bool get isPreviousTrack => _trackIndex.value > 0;
   bool get isNextTrack => _trackIndex.value < _tracks.value.length - 1;
-  Soundtrack? get previousSoundtrack =>
-      isPreviousTrack ? _tracks.value[_trackIndex.value - 1] : null;
   Soundtrack? get actualSoundtrack =>
       isTracksNotEmpty ? _tracks.value[_trackIndex.value] : null;
-  Soundtrack? get nextSoundtrack =>
-      isNextTrack ? _tracks.value[_trackIndex.value + 1] : null;
 
   Playlist.empty(this._name) : id = uuid.v4();
 
@@ -90,7 +86,7 @@ class Playlist {
 
   void removeTrack(int index) => _tracks.value.removeAt(index);
 
-  void changeCurrentTrack(int index) => trackIndex.value = index;
+  void changeTrack(int index) => trackIndex.value = index;
 
   void previousTrack() {
     if (isPreviousTrack) {
