@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:sound_manager/model.dart';
 import 'package:sound_manager/view/widget/audio_player_widget.dart';
+import 'package:sound_manager/view/widget/effects_player_widget.dart';
 import 'package:window_size/window_size.dart';
 
 void main() {
@@ -38,9 +39,9 @@ class _SoundManagerScreenState extends State<SoundManagerScreen> {
   final effectPlayer = AudioPlayerManager(PlayerType.effect);
 
   void pauseAll() {
-    ambiancePlayer.pause;
-    musicPlayer.pause;
-    effectPlayer.pause;
+    ambiancePlayer.pause();
+    musicPlayer.pause();
+    effectPlayer.pause();
   }
 
   @override
@@ -53,29 +54,15 @@ class _SoundManagerScreenState extends State<SoundManagerScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    body: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8.0),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            SizedBox(
-              height: MediaQuery.sizeOf(context).height / 2.5,
-              child: AudioPlayerWidget(player: ambiancePlayer),
-            ),
-            Divider(),
-            SizedBox(
-              height: MediaQuery.sizeOf(context).height / 2.5,
-              child: AudioPlayerWidget(player: musicPlayer),
-            ),
-            Divider(),
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Text('Effects : WIP'),
-            ),
-          ],
-        ),
-      ),
+    body: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Expanded(child: AudioPlayerWidget(player: ambiancePlayer)),
+        //Divider(thickness: 3),
+        EffectsPlayerWidget(player: effectPlayer),
+        //Divider(thickness: 3),
+        Expanded(child: AudioPlayerWidget(player: musicPlayer)),
+      ],
     ),
   );
 }

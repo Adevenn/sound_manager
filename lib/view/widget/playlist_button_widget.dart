@@ -1,0 +1,39 @@
+import 'package:flutter/material.dart';
+import 'package:sound_manager/model.dart';
+import 'package:sound_manager/view/playlist_screen.dart';
+
+class PlaylistButtonWidget extends StatelessWidget {
+  final Function callback;
+  final AudioPlayerManager player;
+  Playlist get playlist => player.playlist;
+
+  const PlaylistButtonWidget({
+    super.key,
+    required this.player,
+    required this.callback,
+  });
+
+  @override
+  Widget build(BuildContext context) => FloatingActionButton(
+    onPressed: () async {
+      var newPlaylist = await showDialog<Playlist>(
+        context: context,
+        builder:
+            (context) =>
+                Dialog.fullscreen(child: PlaylistScreen(player: player)),
+      );
+      if (newPlaylist != null && !playlist.compare(newPlaylist)) {
+        player.playlist = newPlaylist;
+        player.changeTrack(playlist.actualSoundtrack);
+      }
+      callback();
+    },
+    child: Image.asset(
+      'assets/song_list.png',
+      height: 24,
+      width: 24,
+      color: Colors.white60,
+      filterQuality: FilterQuality.medium,
+    ),
+  );
+}

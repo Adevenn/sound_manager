@@ -86,60 +86,55 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
   }
 
   Widget get _playlistContent => Expanded(
-    child: ValueListenableBuilder(
-      valueListenable: player.tracks,
-      builder:
-          (context, sounds, child) => () {
-            var isHover = ValueNotifier<bool>(false);
-            return DragTarget(
-              onWillAcceptWithDetails: <String>(i) => isHover.value = true,
-              onLeave: (i) => isHover.value = false,
-              onAcceptWithDetails: <String>(i) async {
-                final draggedPath = i.data;
-                if (await File(draggedPath).exists()) {
-                  player.addSoundtrack(draggedPath);
-                }
-                isHover.value = false;
-              },
+    child: () {
+      var isHover = ValueNotifier<bool>(false);
+      return DragTarget(
+        onWillAcceptWithDetails: <String>(i) => isHover.value = true,
+        onLeave: (i) => isHover.value = false,
+        onAcceptWithDetails: <String>(i) async {
+          final draggedPath = i.data;
+          if (await File(draggedPath).exists()) {
+            player.addSoundtrack(draggedPath);
+          }
+          isHover.value = false;
+        },
+        builder:
+            (
+              BuildContext context,
+              List<dynamic> accepted,
+              List<dynamic> rejected,
+            ) => ValueListenableBuilder(
+              valueListenable: isHover,
               builder:
-                  (
-                    BuildContext context,
-                    List<dynamic> accepted,
-                    List<dynamic> rejected,
-                  ) => ValueListenableBuilder(
-                    valueListenable: isHover,
-                    builder:
-                        (context, value, child) =>
-                            value
-                                ? Card(
-                                  shape: const RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.all(
-                                      Radius.circular(12.0),
-                                    ),
+                  (context, value, child) =>
+                      value
+                          ? Card(
+                            shape: const RoundedRectangleBorder(
+                              borderRadius: BorderRadius.all(
+                                Radius.circular(12.0),
+                              ),
+                            ),
+                            child: Center(
+                              child: Icon(Icons.add_rounded, size: 50),
+                            ),
+                          )
+                          : player.playlist.isNotEmpty
+                          ? ListView.separated(
+                            itemCount: playlist.length,
+                            separatorBuilder: (context, index) => Divider(),
+                            itemBuilder:
+                                (context, index) => ListTile(
+                                  leading: Icon(Icons.music_note_rounded),
+                                  title: Text(
+                                    p.basename(player.tracks[index].source),
+                                    overflow: TextOverflow.ellipsis,
                                   ),
-                                  child: Center(
-                                    child: Icon(Icons.add_rounded, size: 50),
-                                  ),
-                                )
-                                : sounds.isNotEmpty
-                                ? ListView.separated(
-                                  itemCount: sounds.length,
-                                  separatorBuilder:
-                                      (context, index) => Divider(),
-                                  itemBuilder:
-                                      (context, index) => ListTile(
-                                        leading: Icon(Icons.music_note_rounded),
-                                        title: Text(
-                                          p.basename(sounds[index].source),
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                )
-                                : Container(),
-                  ),
-            );
-          }(),
-    ),
+                                ),
+                          )
+                          : Container(),
+            ),
+      );
+    }(),
   );
 
   @override
