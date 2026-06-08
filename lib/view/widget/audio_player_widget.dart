@@ -1,8 +1,6 @@
-import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:sound_manager/model.dart';
 import 'package:sound_manager/view/loading.dart';
-import 'package:sound_manager/view/playlist_screen.dart';
 import 'package:sound_manager/view/widget/audio_volume_widget.dart';
 import 'package:sound_manager/view/widget/playlist_button_widget.dart';
 
@@ -103,10 +101,16 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.all(8.0),
-                child: ValueListenableBuilder<String?>(
-                  valueListenable: player.path,
+                child: ListenableBuilder(
+                  // Rebuild on track change too: tapping a duplicate-named
+                  // track changes the index but not the path, so listening to
+                  // path alone would not refresh the selection.
+                  listenable: Listenable.merge([
+                    player.path,
+                    playlist.trackIndex,
+                  ]),
                   builder:
-                      (BuildContext context, String? path, Widget? child) =>
+                      (BuildContext context, Widget? child) =>
                           player.playlist.isNotEmpty
                               ? ListView.separated(
                                 itemBuilder:
@@ -150,14 +154,17 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
                     ),
                     Expanded(
                       flex: 4,
-                      child: ValueListenableBuilder<PlayerState>(
-                        valueListenable: player.state,
+                      child: ListenableBuilder(
+                        // Listen to both playback state (play/pause icon) and
+                        // the track index (prev/next enabled state), since
+                        // skipping between two playing tracks leaves the state
+                        // unchanged and would not trigger a rebuild.
+                        listenable: Listenable.merge([
+                          player.state,
+                          playlist.trackIndex,
+                        ]),
                         builder:
-                            (
-                              BuildContext context,
-                              PlayerState state,
-                              Widget? child,
-                            ) => Column(
+                            (BuildContext context, Widget? child) => Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 Row(
