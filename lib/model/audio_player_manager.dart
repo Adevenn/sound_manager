@@ -194,7 +194,11 @@ class AudioPlayerManager {
   Future<void> play() async {
     if (_path.value == null) return;
     try {
+      // Stop first so re-selecting the track that is already playing restarts
+      // it from the beginning instead of continuing from its current position.
+      await _player.stop();
       await _player.play(DeviceFileSource(_path.value!));
+      _position.value = Duration.zero;
       _changeState(PlayerState.playing);
     } catch (e) {
       throw Exception('Error with the file: $e');
