@@ -1,8 +1,8 @@
-import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:sound_manager/model.dart';
 import 'package:sound_manager/view/loading.dart';
-import 'package:sound_manager/view/playlist_screen.dart';
+import 'package:sound_manager/view/widget/audio_volume_widget.dart';
+import 'package:sound_manager/view/widget/playlist_button_widget.dart';
 
 class AudioPlayerWidget extends StatefulWidget {
   final AudioPlayerManager player;
@@ -16,31 +16,81 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
   AudioPlayerManager get player => widget.player;
   Playlist get playlist => widget.player.playlist;
 
+  late final Future<void> _settingsFuture = player.loadSettings();
+
   Widget get _previousTrack => IconButton(
-    icon: Icon(Icons.skip_previous_rounded, size: 40),
+    icon: Icon(Icons.skip_previous_rounded, size: 35),
     onPressed: playlist.isPreviousTrack ? () => player.previousTrack() : null,
   );
 
   Widget get _playPauseButton => IconButton(
     icon: Icon(
-      playlist.isTracksNotEmpty
+      playlist.isNotEmpty
           ? player.isPlaying
               ? Icons.pause_rounded
               : Icons.play_arrow_rounded
           : Icons.play_disabled_rounded,
-      size: 40,
+      size: 35,
     ),
     onPressed:
         playlist.actualSoundtrack != null
             ? () async {
-              player.isPlaying ? await player.pause() : await player.play();
+              if (player.isPlaying) {
+                await player.pause();
+              } else if (player.isPause) {
+                await player.resume();
+              } else {
+                await player.play(short: true);
+              }
             }
             : null,
   );
 
   Widget get _nextTrack => IconButton(
-    icon: Icon(Icons.skip_next_rounded, size: 40),
+    icon: Icon(Icons.skip_next_rounded, size: 35),
     onPressed: playlist.isNextTrack ? () => player.nextTrack() : null,
+  );
+
+  Widget get _loopButton => ValueListenableBuilder<LoopMode>(
+    valueListenable: playlist.loopMode,
+    builder:
+        (context, mode, child) => IconButton(
+          tooltip: switch (mode) {
+            LoopMode.none => 'Boucle : désactivée',
+            LoopMode.all => 'Boucle : playlist entière',
+            LoopMode.one => 'Boucle : morceau courant',
+          },
+          icon: Icon(
+            mode == LoopMode.one
+                ? Icons.repeat_one_rounded
+                : Icons.repeat_rounded,
+            size: 28,
+          ),
+          color: mode == LoopMode.none ? Colors.white60 : Colors.green[400],
+          onPressed: () => playlist.cycleLoop(),
+        ),
+  );
+
+  Widget get _shuffleButton => ValueListenableBuilder<bool>(
+    valueListenable: playlist.shuffle,
+    builder:
+        (context, on, child) => IconButton(
+          tooltip: 'Lecture aléatoire',
+          icon: Icon(Icons.shuffle_rounded, size: 26),
+          color: on ? Colors.green[400] : Colors.white60,
+          onPressed: () => playlist.toggleShuffle(),
+        ),
+  );
+
+  Widget get _fadeButton => ValueListenableBuilder<bool>(
+    valueListenable: player.fadeEnabled,
+    builder:
+        (context, fade, child) => IconButton(
+          tooltip: 'Fondu enchaîné',
+          icon: Icon(Icons.graphic_eq_rounded, size: 28),
+          color: fade ? Colors.green[400] : Colors.white60,
+          onPressed: () => player.toggleFade(),
+        ),
   );
 
   Widget get _timer => ValueListenableBuilder<Duration>(
@@ -82,189 +132,113 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
             ),
   );
 
-  Widget get _volume => ValueListenableBuilder<double>(
-    valueListenable: player.volume,
-    builder:
-        (BuildContext context, double volume, Widget? child) =>
-            ValueListenableBuilder<bool>(
-              valueListenable: player.isMuted,
-              builder:
-                  (BuildContext context, bool isMuted, Widget? child) => Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Expanded(
-                        child: RotatedBox(
-                          quarterTurns: 3,
-                          child: Slider(
-                            value: isMuted ? 0.0 : volume,
-                            onChanged: (value) => player.setVolume(value),
-                            onChangeEnd:
-                                (value) => player.setVolumeSettings(value),
-                            min: 0.0,
-                            max: 1.0,
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        icon: Icon(
-                          isMuted
-                              ? Icons.volume_off_rounded
-                              : switch (volume) {
-                                0 => Icons.volume_off_rounded,
-                                < 0.3 => Icons.volume_mute_rounded,
-                                < 0.6 => Icons.volume_down_rounded,
-                                _ => Icons.volume_up_rounded,
-                              },
-                        ),
-                        color: Colors.white60,
-                        iconSize: 30,
-                        onPressed: () => player.switchIsMuted(),
-                      ),
-                    ],
-                  ),
-            ),
-  );
-
   @override
   Widget build(BuildContext context) => FutureBuilder(
-    future: player.loadSettings(),
+    future: _settingsFuture,
     builder: (BuildContext context, snapshot) {
       if (snapshot.hasData ||
           snapshot.connectionState == ConnectionState.done) {
-        return Column(
-          mainAxisAlignment: MainAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.start,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                spacing: 8,
-                children: [
-                  Text(
-                    player.type.name.capitalize(),
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                  ),
-                  ElevatedButton(
-                    onPressed: () async {
-                      var newPlaylist = await showDialog<Playlist>(
-                        context: context,
-                        builder:
-                            (context) => Dialog.fullscreen(
-                              child: PlaylistScreen(player: player),
-                            ),
-                      );
-                      if (newPlaylist != null &&
-                          !playlist.compare(newPlaylist)) {
-                        player.playlist = newPlaylist;
-                        player.changeTrack(playlist.actualSoundtrack);
-                      }
-                      setState(() {});
-                    },
-                    child: Image.asset(
-                      'assets/song_list.png',
-                      height: 24,
-                      width: 24,
-                      color: Colors.white60,
-                      filterQuality: FilterQuality.medium,
-                    ),
-                  ),
-                ],
+        return ListenableBuilder(
+          listenable: player.playlistRevision,
+          builder:
+              (context, child) => Column(
+            children: [
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: ListenableBuilder(
+                  // Rebuild on track change too: tapping a duplicate-named
+                  // track changes the index but not the path, so listening to
+                  // path alone would not refresh the selection.
+                  listenable: Listenable.merge([
+                    player.path,
+                    playlist.trackIndex,
+                  ]),
+                  builder:
+                      (BuildContext context, Widget? child) =>
+                          player.playlist.isNotEmpty
+                              ? ListView.separated(
+                                itemBuilder:
+                                    (context, index) => ListTile(
+                                      selected:
+                                          player.playlist.tracks[index].id ==
+                                          player.playlist.actualSoundtrack!.id,
+                                      selectedColor: Colors.green[400],
+                                      title: Text(
+                                        player.tracks[index].name,
+                                        style: TextStyle(fontSize: 14),
+                                        overflow: TextOverflow.ellipsis,
+                                        maxLines: 2,
+                                      ),
+                                      onTap:
+                                          () => player.changeTrack(
+                                            player.playlist.tracks[index],
+                                          ),
+                                    ),
+                                separatorBuilder: (context, index) => Divider(),
+                                itemCount: player.playlist.length,
+                              )
+                              : Center(child: Text("No track")),
+                ),
               ),
             ),
-            Expanded(
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  Expanded(
-                    flex: 1,
-                    child: Padding(
-                      padding: const EdgeInsets.all(8.0),
-                      child: ValueListenableBuilder<String?>(
-                        valueListenable: player.path,
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                child: Row(
+                  children: [
+                    Expanded(
+                      flex: 1,
+                      child: Text(
+                        player.type.name.capitalize(),
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      flex: 4,
+                      child: ListenableBuilder(
+                        // Listen to both playback state (play/pause icon) and
+                        // the track index (prev/next enabled state), since
+                        // skipping between two playing tracks leaves the state
+                        // unchanged and would not trigger a rebuild.
+                        listenable: Listenable.merge([
+                          player.state,
+                          playlist.trackIndex,
+                        ]),
                         builder:
-                            (
-                              BuildContext context,
-                              String? path,
-                              Widget? child,
-                            ) => SizedBox(
-                              height: MediaQuery.sizeOf(context).height / 3,
-                              child:
-                                  player.playlist.isTracksNotEmpty
-                                      ? ListView.separated(
-                                        itemBuilder:
-                                            (context, index) => ListTile(
-                                              selected:
-                                                  player
-                                                      .playlist
-                                                      .tracks
-                                                      .value[index]
-                                                      .id ==
-                                                  player
-                                                      .playlist
-                                                      .actualSoundtrack!
-                                                      .id,
-                                              selectedColor: Colors.green[400],
-                                              title: Text(
-                                                player.tracks.value[index].name,
-                                                style: TextStyle(fontSize: 14),
-                                                overflow: TextOverflow.ellipsis,
-                                                maxLines: 2,
-                                              ),
-                                              onTap:
-                                                  () => player.changeTrack(
-                                                    player
-                                                        .playlist
-                                                        .tracks
-                                                        .value[index],
-                                                  ),
-                                            ),
-                                        separatorBuilder:
-                                            (context, index) => Divider(),
-                                        itemCount: player.playlist.length,
-                                      )
-                                      : Center(child: Text("No track")),
+                            (BuildContext context, Widget? child) => Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    _loopButton,
+                                    _shuffleButton,
+                                    _previousTrack,
+                                    _playPauseButton,
+                                    _nextTrack,
+                                    _fadeButton,
+                                    PlaylistButtonWidget(
+                                      player: player,
+                                      callback: () => setState(() => ()),
+                                    ),
+                                  ],
+                                ),
+                                _timer,
+                              ],
                             ),
                       ),
                     ),
-                  ),
-                  Expanded(
-                    flex: 3,
-                    child: ValueListenableBuilder<int>(
-                      valueListenable: playlist.trackIndex,
-                      builder:
-                          (BuildContext context, int index, Widget? child) =>
-                              ValueListenableBuilder<PlayerState>(
-                                valueListenable: player.state,
-                                builder:
-                                    (
-                                      BuildContext context,
-                                      PlayerState state,
-                                      Widget? child,
-                                    ) => Column(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      children: [
-                                        Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            _previousTrack,
-                                            _playPauseButton,
-                                            _nextTrack,
-                                          ],
-                                        ),
-                                        _timer,
-                                      ],
-                                    ),
-                              ),
-                    ),
-                  ),
-                  Expanded(child: _volume),
-                ],
+                    Expanded(child: AudioVolumeWidget(player: player)),
+                  ],
+                ),
               ),
             ),
           ],
+          ),
         );
       } else if (snapshot.hasError &&
           snapshot.connectionState == ConnectionState.done) {
