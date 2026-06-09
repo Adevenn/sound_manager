@@ -1,8 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sound_manager/model/prefs.dart';
 
-/// User-rebindable keyboard shortcuts, backed by [SharedPreferences].
+/// User-rebindable keyboard shortcuts, backed by the shared [Prefs] instance.
 ///
 /// Two groups of actions:
 /// - [playPauseAll]: global pause/resume for the ambiance + music channels.
@@ -46,8 +46,8 @@ class ShortcutSettings {
   /// Bumped whenever a binding changes so listeners can rebuild.
   final ValueNotifier<int> revision = ValueNotifier(0);
 
-  Future<void> load() async {
-    final p = await SharedPreferences.getInstance();
+  void load() {
+    final p = Prefs.instance;
     final pp = p.getInt(_kPlayPause);
     if (pp != null) playPauseAll = LogicalKeyboardKey(pp);
     for (var i = 0; i < effectSlots; i++) {
@@ -58,31 +58,28 @@ class ShortcutSettings {
     }
   }
 
-  Future<void> setPlayPauseAll(LogicalKeyboardKey key) async {
+  void setPlayPauseAll(LogicalKeyboardKey key) {
     playPauseAll = key;
-    (await SharedPreferences.getInstance()).setInt(_kPlayPause, key.keyId);
+    Prefs.instance.setInt(_kPlayPause, key.keyId);
     revision.value++;
   }
 
-  Future<void> setEffectKey(int slot, LogicalKeyboardKey? key) async {
+  void setEffectKey(int slot, LogicalKeyboardKey? key) {
     if (slot < 0 || slot >= effectSlots) return;
     effectKeys[slot] = key;
-    (await SharedPreferences.getInstance()).setInt(
-      '$_kEffectPrefix$slot',
-      key?.keyId ?? _unbound,
-    );
+    Prefs.instance.setInt('$_kEffectPrefix$slot', key?.keyId ?? _unbound);
     revision.value++;
   }
 
-  Future<void> resetDefaults() async {
+  void resetDefaults() {
     playPauseAll = LogicalKeyboardKey.space;
     for (var i = 0; i < effectSlots; i++) {
       effectKeys[i] = _defaultDigits[i];
     }
-    final p = await SharedPreferences.getInstance();
-    await p.remove(_kPlayPause);
+    final p = Prefs.instance;
+    p.remove(_kPlayPause);
     for (var i = 0; i < effectSlots; i++) {
-      await p.remove('$_kEffectPrefix$i');
+      p.remove('$_kEffectPrefix$i');
     }
     revision.value++;
   }

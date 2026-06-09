@@ -28,8 +28,21 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
   late final Future<void> _settingsFuture = _initSettings();
 
   Future<void> _initSettings() async {
-    var path = await UserSettings.getPlayerSourceDirectory(player.type);
+    var path = UserSettings.getPlayerSourceDirectory(player.type);
     directory.value = path == null ? null : Directory(path);
+    await _scanMissing();
+  }
+
+  /// Sources in the working playlist whose file is missing on disk, refreshed
+  /// after any edit so broken tracks are flagged in the list.
+  Set<String> _missingSources = {};
+
+  Future<void> _scanMissing() async {
+    final missing = <String>{};
+    for (final track in playlist.tracks) {
+      if (!await track.exists()) missing.add(track.source);
+    }
+    if (mounted) setState(() => _missingSources = missing);
   }
 
   /// Prompts for a name then saves the working playlist to disk and remembers
@@ -61,8 +74,8 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
           ),
     );
     if (name == null || name.isEmpty) return;
-    await playlist.saveAs(name);
-    await UserSettings.setCurrentPlaylist(player.type, playlist);
+    await PlaylistRepository.saveAs(playlist, name);
+    await UserSettings.setCurrentPlaylist(player.type, name);
     if (mounted) {
       setState(() {});
       ScaffoldMessenger.of(
@@ -74,7 +87,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
   /// Lets the user pick a saved playlist (or delete one) and load it as the
   /// working playlist.
   Future<void> _loadPlaylistDialog() async {
-    final names = await Playlist.listAll();
+    final names = await PlaylistRepository.listAll();
     if (!mounted) return;
     if (names.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -103,7 +116,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
                               icon: const Icon(Icons.delete_outline_rounded),
                               tooltip: 'Delete',
                               onPressed: () async {
-                                await Playlist.delete(name);
+                                await PlaylistRepository.delete(name);
                                 names.remove(name);
                                 setDialogState(() {});
                               },
@@ -122,9 +135,23 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
           ),
     );
     if (chosen == null) return;
-    final loaded = await Playlist.fromFile(chosen);
-    await UserSettings.setCurrentPlaylist(player.type, loaded);
-    if (mounted) setState(() => playlist = loaded);
+    final Playlist loaded;
+    try {
+      loaded = await PlaylistRepository.load(chosen);
+    } catch (_) {
+      // Corrupted or unreadable file: report instead of crashing the dialog.
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not load playlist "$chosen"')),
+        );
+      }
+      return;
+    }
+    await UserSettings.setCurrentPlaylist(player.type, chosen);
+    if (mounted) {
+      setState(() => playlist = loaded);
+      await _scanMissing();
+    }
   }
 
   Future<void> _pickDirectory() async {
@@ -208,10 +235,10 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
   Widget get _playlistContent => Expanded(
     child: () {
       var isHover = ValueNotifier<bool>(false);
-      return DragTarget(
-        onWillAcceptWithDetails: <String>(i) => isHover.value = true,
+      return DragTarget<String>(
+        onWillAcceptWithDetails: (i) => isHover.value = true,
         onLeave: (i) => isHover.value = false,
-        onAcceptWithDetails: <String>(i) async {
+        onAcceptWithDetails: (i) async {
           final draggedPath = i.data;
           if (await File(draggedPath).exists()) {
             setState(() => playlist.addSoundtrack(draggedPath));
@@ -280,7 +307,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
                                           child: child,
                                         ),
                                       ),
-                                  onReorder:
+                                  onReorderItem:
                                       (oldIndex, newIndex) => setState(
                                         () => playlist.reorderTrack(
                                           oldIndex,
@@ -292,6 +319,11 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
                                     final playing =
                                         track.id ==
                                         player.playlist.actualSoundtrack?.id;
+                                    final missing = _missingSources.contains(
+                                      track.source,
+                                    );
+                                    final errorColor =
+                                        Theme.of(context).colorScheme.error;
                                     return ListTile(
                                       key: ValueKey(track.id),
                                       selected: playing,
@@ -302,14 +334,33 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
                                       leading: ReorderableDragStartListener(
                                         index: index,
                                         child: Icon(
-                                          Icons.drag_handle_rounded,
-                                          color: playing ? _accent : null,
+                                          missing
+                                              ? Icons.error_outline_rounded
+                                              : Icons.drag_handle_rounded,
+                                          color:
+                                              missing
+                                                  ? errorColor
+                                                  : (playing ? _accent : null),
                                         ),
                                       ),
                                       title: Text(
                                         p.basename(track.source),
                                         overflow: TextOverflow.ellipsis,
+                                        style:
+                                            missing
+                                                ? TextStyle(color: errorColor)
+                                                : null,
                                       ),
+                                      subtitle:
+                                          missing
+                                              ? Text(
+                                                'File not found',
+                                                style: TextStyle(
+                                                  color: errorColor,
+                                                  fontSize: 11,
+                                                ),
+                                              )
+                                              : null,
                                       trailing: Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [

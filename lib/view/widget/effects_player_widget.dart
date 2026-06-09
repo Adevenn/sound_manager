@@ -133,8 +133,12 @@ class _AudioPlayerWidgetState extends State<EffectsPlayerWidget> {
                 ),
           ),
     );
-    // Persist (best effort) and refresh the soundboard.
-    await player.playlist.save();
+    // Persist (best effort) and refresh the soundboard. Also remember this as
+    // the channel's current playlist so the configured board is restored on the
+    // next launch (the per-channel default name keeps it from clobbering the
+    // other channels' files).
+    await PlaylistRepository.save(player.playlist);
+    await UserSettings.setCurrentPlaylist(player.type, player.playlist.name);
     if (mounted) setState(() {});
   }
 

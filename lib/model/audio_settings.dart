@@ -1,8 +1,8 @@
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sound_manager/model/prefs.dart';
 
 /// Global, app-wide audio settings (shared by every channel): master volume,
-/// fade behaviour and fade durations. Backed by [SharedPreferences].
+/// fade behaviour and fade durations. Backed by the shared [Prefs] instance.
 class AudioSettings {
   AudioSettings._();
   static final AudioSettings instance = AudioSettings._();
@@ -26,8 +26,8 @@ class AudioSettings {
   Duration get shortFade => Duration(milliseconds: shortFadeMs.value);
   Duration get longFade => Duration(milliseconds: longFadeMs.value);
 
-  Future<void> load() async {
-    final p = await SharedPreferences.getInstance();
+  void load() {
+    final p = Prefs.instance;
     masterVolume.value = p.getDouble('master_volume') ?? 1.0;
     fadeEnabled.value = p.getBool('fade_enabled') ?? true;
     crossfadeEnabled.value = p.getBool('crossfade_enabled') ?? true;
@@ -35,28 +35,28 @@ class AudioSettings {
     longFadeMs.value = p.getInt('long_fade_ms') ?? 2000;
   }
 
-  Future<void> setMasterVolume(double v) async {
+  void setMasterVolume(double v) {
     masterVolume.value = v;
-    (await SharedPreferences.getInstance()).setDouble('master_volume', v);
+    Prefs.instance.setDouble('master_volume', v);
   }
 
-  Future<void> setFadeEnabled(bool v) async {
+  void setFadeEnabled(bool v) {
     fadeEnabled.value = v;
-    (await SharedPreferences.getInstance()).setBool('fade_enabled', v);
+    Prefs.instance.setBool('fade_enabled', v);
   }
 
-  Future<void> setCrossfadeEnabled(bool v) async {
+  void setCrossfadeEnabled(bool v) {
     crossfadeEnabled.value = v;
-    (await SharedPreferences.getInstance()).setBool('crossfade_enabled', v);
+    Prefs.instance.setBool('crossfade_enabled', v);
   }
 
-  Future<void> setShortFadeMs(int v) async {
+  void setShortFadeMs(int v) {
     shortFadeMs.value = v;
-    (await SharedPreferences.getInstance()).setInt('short_fade_ms', v);
+    Prefs.instance.setInt('short_fade_ms', v);
   }
 
-  Future<void> setLongFadeMs(int v) async {
+  void setLongFadeMs(int v) {
     longFadeMs.value = v;
-    (await SharedPreferences.getInstance()).setInt('long_fade_ms', v);
+    Prefs.instance.setInt('long_fade_ms', v);
   }
 }

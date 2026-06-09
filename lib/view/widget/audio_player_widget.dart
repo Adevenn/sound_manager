@@ -195,12 +195,18 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
   Widget _trackList() => ListenableBuilder(
     // Rebuild on track change too: tapping a duplicate-named track changes the
     // index but not the path, so listening to path alone would not refresh the
-    // selection.
-    listenable: Listenable.merge([player.path, playlist.trackIndex]),
+    // selection. Also rebuild when the set of missing files is recomputed.
+    listenable: Listenable.merge([
+      player.path,
+      playlist.trackIndex,
+      player.missingTrackIds,
+    ]),
     builder: (BuildContext context, Widget? child) {
       if (player.playlist.isEmpty) {
         return const Center(child: Text('No track'));
       }
+      final missing = player.missingTrackIds.value;
+      final errorColor = Theme.of(context).colorScheme.error;
       return ListView.separated(
         padding: const EdgeInsets.symmetric(vertical: 4),
         itemCount: player.playlist.length,
@@ -208,21 +214,38 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
         itemBuilder: (context, index) {
           final track = player.playlist.tracks[index];
           final playing = track.id == player.playlist.actualSoundtrack?.id;
+          final isMissing = missing.contains(track.id);
           return ListTile(
             dense: true,
             selected: playing,
             selectedColor: _accent,
             selectedTileColor: _accent.withValues(alpha: 0.12),
             leading:
-                playing
+                isMissing
+                    ? Icon(
+                      Icons.error_outline_rounded,
+                      color: errorColor,
+                      size: 20,
+                    )
+                    : playing
                     ? Icon(Icons.equalizer_rounded, color: _accent, size: 20)
                     : const Icon(Icons.music_note_rounded, size: 20),
             title: Text(
               track.name,
-              style: const TextStyle(fontSize: 14),
+              style: TextStyle(
+                fontSize: 14,
+                color: isMissing ? errorColor : null,
+              ),
               overflow: TextOverflow.ellipsis,
               maxLines: 2,
             ),
+            subtitle:
+                isMissing
+                    ? Text(
+                      'File not found',
+                      style: TextStyle(color: errorColor, fontSize: 11),
+                    )
+                    : null,
             onTap: () => player.changeTrack(track),
           );
         },

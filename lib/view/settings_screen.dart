@@ -135,7 +135,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 current: shortcuts.playPauseAll,
                 onRebind: () async {
                   final key = await _captureKey();
-                  if (key != null) await shortcuts.setPlayPauseAll(key);
+                  if (key != null) shortcuts.setPlayPauseAll(key);
                 },
               ),
               const Divider(),
@@ -146,7 +146,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   current: shortcuts.effectKeys[i],
                   onRebind: () async {
                     final key = await _captureKey();
-                    if (key != null) await shortcuts.setEffectKey(i, key);
+                    if (key != null) shortcuts.setEffectKey(i, key);
                   },
                   onClear: () => shortcuts.setEffectKey(i, null),
                 ),

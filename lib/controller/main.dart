@@ -6,15 +6,25 @@ import 'package:sound_manager/view/theme/app_theme.dart';
 import 'package:sound_manager/view/settings_screen.dart';
 import 'package:sound_manager/view/widget/audio_player_widget.dart';
 import 'package:sound_manager/view/widget/effects_player_widget.dart';
-import 'package:window_size/window_size.dart';
+import 'package:window_manager/window_manager.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await AudioSettings.instance.load();
-  await ShortcutSettings.instance.load();
+  // Load the shared preferences once so all settings classes can read/write
+  // synchronously afterwards.
+  await Prefs.init();
+  AudioSettings.instance.load();
+  ShortcutSettings.instance.load();
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
-    setWindowTitle('Sound Manager');
-    setWindowMinSize(const Size(800, 600));
+    await windowManager.ensureInitialized();
+    const windowOptions = WindowOptions(
+      title: 'Sound Manager',
+      minimumSize: Size(800, 600),
+    );
+    await windowManager.waitUntilReadyToShow(windowOptions, () async {
+      await windowManager.show();
+      await windowManager.focus();
+    });
   }
   runApp(SoundManagerApp());
 }
@@ -75,7 +85,7 @@ class _SoundManagerScreenState extends State<SoundManagerScreen> {
     final playlists = <String, String>{};
     final volumes = <String, double>{};
     for (final m in _managers) {
-      if (m.playlist.isNotEmpty) await m.playlist.save();
+      if (m.playlist.isNotEmpty) await PlaylistRepository.save(m.playlist);
       playlists[m.type.name] = m.playlist.name;
       volumes[m.type.name] = m.volume.value;
     }

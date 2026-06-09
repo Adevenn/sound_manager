@@ -1,10 +1,6 @@
-import 'dart:convert';
-import 'dart:io';
 import 'dart:math' as math;
 
-import 'package:flutter/widgets.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
+import 'package:flutter/foundation.dart';
 import 'package:sound_manager/model.dart';
 
 import 'uuid.dart';
@@ -19,7 +15,6 @@ class Playlist {
   late final String id;
   String _name;
   String get name => _name;
-  File? _file;
   final List<Soundtrack> _tracks = [];
   List<Soundtrack> get tracks => _tracks;
   final ValueNotifier<int> _trackIndex = ValueNotifier(0);
@@ -81,51 +76,21 @@ class Playlist {
 
   Playlist.empty(this._name) : id = uuid.v4();
 
-  ///Bare constructor used by [fromFile]; [id] is filled in by [_loadContent].
-  Playlist._forLoad(this._name);
-
-  //Careful, create() is async
-  Playlist.create(this._name) : id = uuid.v4() {
-    _create();
-  }
-
-  Future<void> _create() async {
-    _file = File('${(await directory).path}/$name.json')..createSync();
-    _file!.writeAsString(jsonEncode(toJson()));
-  }
-
-  ///Loads a playlist from its `$name.json` file. Use this instead of an
-  ///async constructor so the tracks are fully loaded before the object is used.
-  static Future<Playlist> fromFile(String name) async {
-    final playlist = Playlist._forLoad(name);
-    await playlist._loadContent();
-    return playlist;
-  }
-
-  ///Loads the file and extract data from the json inside
-  Future<void> _loadContent() async {
-    try {
-      _file = File('${(await directory).path}/$name.json');
-      var json = jsonDecode(_file!.readAsStringSync());
-      id = json['id'];
-      _name = json['name'];
-      _tracks.clear();
-      for (var sound in json['sounds']) {
-        _tracks.add(Soundtrack.fromJson(sound));
-      }
-      _trackIndex.value = json['index'];
-      final loopJson = json['loopMode'];
-      if (loopJson != null) {
-        loopMode.value = LoopMode.values.byName(loopJson);
-      } else if (json['loop'] == true) {
-        loopMode.value = LoopMode.all; // backward compat with old files
-      }
-      shuffle.value = json['shuffle'] ?? false;
-    } catch (e, stack) {
-      // Surface the failure instead of silently swallowing it so the caller's
-      // FutureBuilder can show an error state.
-      Error.throwWithStackTrace(e, stack);
+  /// Rebuilds a playlist from its JSON map (as written by [toJson]). Pure: file
+  /// reading lives in `PlaylistRepository`.
+  Playlist.fromJson(Map<String, dynamic> json) : _name = json['name'] as String {
+    id = json['id'] as String;
+    for (final sound in (json['sounds'] as List)) {
+      _tracks.add(Soundtrack.fromJson(sound));
     }
+    _trackIndex.value = (json['index'] as int?) ?? 0;
+    final loopJson = json['loopMode'];
+    if (loopJson != null) {
+      loopMode.value = LoopMode.values.byName(loopJson as String);
+    } else if (json['loop'] == true) {
+      loopMode.value = LoopMode.all; // backward compat with old files
+    }
+    shuffle.value = json['shuffle'] as bool? ?? false;
   }
 
   Map<String, dynamic> toJson() => {
@@ -137,48 +102,10 @@ class Playlist {
     'shuffle': shuffle.value,
   };
 
-  Future<Directory> get directory => playlistDirectory();
-
-  /// Directory where playlists are persisted (`<appSupport>/Data/Playlist`).
-  static Future<Directory> playlistDirectory() async {
-    final directory = await getApplicationSupportDirectory();
-    final directoryData = await Directory('${directory.path}/Data').create();
-    return Directory('${directoryData.path}/Playlist')..createSync();
-  }
-
-  /// Names (without extension) of every playlist saved on disk.
-  static Future<List<String>> listAll() async {
-    final dir = await playlistDirectory();
-    return dir
-        .listSync()
-        .where((f) => p.extension(f.path) == '.json')
-        .map((f) => p.basenameWithoutExtension(f.path))
-        .toList()
-      ..sort();
-  }
-
-  /// Deletes the playlist's file from disk (if it exists).
-  static Future<void> delete(String name) async {
-    final file = File('${(await playlistDirectory()).path}/$name.json');
-    if (file.existsSync()) await file.delete();
-  }
-
-  ///Rename the playlist
+  /// Renames the playlist (the on-disk file is handled by
+  /// `PlaylistRepository.saveAs`).
   void rename(String newName) {
     _name = newName;
-  }
-
-  ///Save the playlist in its file, creating it the first time if needed.
-  Future<void> save() async {
-    _file ??= File('${(await playlistDirectory()).path}/$name.json');
-    await _file!.writeAsString(jsonEncode(toJson()));
-  }
-
-  ///Save the playlist under a (possibly new) name, e.g. for "save as".
-  Future<void> saveAs(String newName) async {
-    _name = newName;
-    _file = File('${(await playlistDirectory()).path}/$newName.json');
-    await _file!.writeAsString(jsonEncode(toJson()));
   }
 
   void addSoundtrack(String path) =>
@@ -200,8 +127,11 @@ class Playlist {
 
   /// Moves a track within the playlist (used for drag-to-reorder). Keeps the
   /// currently-selected track pointing at the same soundtrack.
+  ///
+  /// [newIndex] is the destination index **after** the item has been removed
+  /// (the convention of `ReorderableListView.onReorderItem`), so no manual
+  /// off-by-one correction is needed here.
   void reorderTrack(int oldIndex, int newIndex) {
-    if (newIndex > oldIndex) newIndex -= 1;
     final current = actualSoundtrack;
     final moved = _tracks.removeAt(oldIndex);
     _tracks.insert(newIndex, moved);
