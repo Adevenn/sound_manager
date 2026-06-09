@@ -15,6 +15,7 @@ class PlaylistButtonWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => FloatingActionButton(
+    heroTag: null,
     onPressed: () async {
       var newPlaylist = await showDialog<Playlist>(
         context: context,
@@ -24,7 +25,11 @@ class PlaylistButtonWidget extends StatelessWidget {
       );
       if (newPlaylist != null && !playlist.compare(newPlaylist)) {
         player.playlist = newPlaylist;
-        player.changeTrack(playlist.actualSoundtrack);
+        // Effects are triggered individually from the soundboard, so don't
+        // auto-play the first track on the main player for that channel.
+        if (player.type != PlayerType.effect) {
+          player.changeTrack(newPlaylist.actualSoundtrack);
+        }
       }
       callback();
     },

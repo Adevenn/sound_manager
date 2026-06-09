@@ -40,7 +40,7 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
               } else if (player.isPause) {
                 await player.resume();
               } else {
-                await player.play();
+                await player.play(short: true);
               }
             }
             : null,
@@ -49,6 +49,48 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
   Widget get _nextTrack => IconButton(
     icon: Icon(Icons.skip_next_rounded, size: 35),
     onPressed: playlist.isNextTrack ? () => player.nextTrack() : null,
+  );
+
+  Widget get _loopButton => ValueListenableBuilder<LoopMode>(
+    valueListenable: playlist.loopMode,
+    builder:
+        (context, mode, child) => IconButton(
+          tooltip: switch (mode) {
+            LoopMode.none => 'Boucle : désactivée',
+            LoopMode.all => 'Boucle : playlist entière',
+            LoopMode.one => 'Boucle : morceau courant',
+          },
+          icon: Icon(
+            mode == LoopMode.one
+                ? Icons.repeat_one_rounded
+                : Icons.repeat_rounded,
+            size: 28,
+          ),
+          color: mode == LoopMode.none ? Colors.white60 : Colors.green[400],
+          onPressed: () => playlist.cycleLoop(),
+        ),
+  );
+
+  Widget get _shuffleButton => ValueListenableBuilder<bool>(
+    valueListenable: playlist.shuffle,
+    builder:
+        (context, on, child) => IconButton(
+          tooltip: 'Lecture aléatoire',
+          icon: Icon(Icons.shuffle_rounded, size: 26),
+          color: on ? Colors.green[400] : Colors.white60,
+          onPressed: () => playlist.toggleShuffle(),
+        ),
+  );
+
+  Widget get _fadeButton => ValueListenableBuilder<bool>(
+    valueListenable: player.fadeEnabled,
+    builder:
+        (context, fade, child) => IconButton(
+          tooltip: 'Fondu enchaîné',
+          icon: Icon(Icons.graphic_eq_rounded, size: 28),
+          color: fade ? Colors.green[400] : Colors.white60,
+          onPressed: () => player.toggleFade(),
+        ),
   );
 
   Widget get _timer => ValueListenableBuilder<Duration>(
@@ -96,8 +138,11 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
     builder: (BuildContext context, snapshot) {
       if (snapshot.hasData ||
           snapshot.connectionState == ConnectionState.done) {
-        return Column(
-          children: [
+        return ListenableBuilder(
+          listenable: player.playlistRevision,
+          builder:
+              (context, child) => Column(
+            children: [
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.all(8.0),
@@ -170,9 +215,12 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
+                                    _loopButton,
+                                    _shuffleButton,
                                     _previousTrack,
                                     _playPauseButton,
                                     _nextTrack,
+                                    _fadeButton,
                                     PlaylistButtonWidget(
                                       player: player,
                                       callback: () => setState(() => ()),
@@ -190,6 +238,7 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
               ),
             ),
           ],
+          ),
         );
       } else if (snapshot.hasError &&
           snapshot.connectionState == ConnectionState.done) {

@@ -25,6 +25,101 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
     directory = ValueNotifier(path == null ? null : Directory(path));
   }
 
+  /// Prompts for a name then saves the working playlist to disk and remembers
+  /// it as this channel's current playlist.
+  Future<void> _savePlaylistDialog() async {
+    final controller = TextEditingController(text: playlist.name);
+    final name = await showDialog<String>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Sauvegarder la playlist'),
+            content: TextField(
+              controller: controller,
+              autofocus: true,
+              decoration: const InputDecoration(labelText: 'Nom'),
+              onSubmitted: (value) => Navigator.of(context).pop(value.trim()),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Annuler'),
+              ),
+              FilledButton(
+                onPressed:
+                    () => Navigator.of(context).pop(controller.text.trim()),
+                child: const Text('Sauvegarder'),
+              ),
+            ],
+          ),
+    );
+    if (name == null || name.isEmpty) return;
+    await playlist.saveAs(name);
+    await UserSettings.setCurrentPlaylist(player.type, playlist);
+    if (mounted) {
+      setState(() {});
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Playlist "$name" sauvegardée')));
+    }
+  }
+
+  /// Lets the user pick a saved playlist (or delete one) and load it as the
+  /// working playlist.
+  Future<void> _loadPlaylistDialog() async {
+    final names = await Playlist.listAll();
+    if (!mounted) return;
+    if (names.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Aucune playlist sauvegardée')),
+      );
+      return;
+    }
+    final chosen = await showDialog<String>(
+      context: context,
+      builder:
+          (context) => StatefulBuilder(
+            builder:
+                (context, setDialogState) => AlertDialog(
+                  title: const Text('Charger une playlist'),
+                  content: SizedBox(
+                    width: 320,
+                    child: ListView(
+                      shrinkWrap: true,
+                      children: [
+                        for (final name in names)
+                          ListTile(
+                            leading: const Icon(Icons.queue_music_rounded),
+                            title: Text(name),
+                            onTap: () => Navigator.of(context).pop(name),
+                            trailing: IconButton(
+                              icon: const Icon(Icons.delete_outline_rounded),
+                              tooltip: 'Supprimer',
+                              onPressed: () async {
+                                await Playlist.delete(name);
+                                names.remove(name);
+                                setDialogState(() {});
+                              },
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('Fermer'),
+                    ),
+                  ],
+                ),
+          ),
+    );
+    if (chosen == null) return;
+    final loaded = await Playlist.fromFile(chosen);
+    await UserSettings.setCurrentPlaylist(player.type, loaded);
+    if (mounted) setState(() => playlist = loaded);
+  }
+
   Future<void> _pickDirectory() async {
     String? directoryPath = await FilePicker.platform.getDirectoryPath(
       initialDirectory: directory.value?.path,
@@ -94,7 +189,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
         onAcceptWithDetails: <String>(i) async {
           final draggedPath = i.data;
           if (await File(draggedPath).exists()) {
-            player.addSoundtrack(draggedPath);
+            setState(() => playlist.addSoundtrack(draggedPath));
           }
           isHover.value = false;
         },
@@ -118,20 +213,41 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
                               child: Icon(Icons.add_rounded, size: 50),
                             ),
                           )
-                          : player.playlist.isNotEmpty
-                          ? ListView.separated(
+                          : playlist.isNotEmpty
+                          ? ReorderableListView.builder(
+                            buildDefaultDragHandles: false,
                             itemCount: playlist.length,
-                            separatorBuilder: (context, index) => Divider(),
+                            onReorder:
+                                (oldIndex, newIndex) => setState(
+                                  () =>
+                                      playlist.reorderTrack(oldIndex, newIndex),
+                                ),
                             itemBuilder:
                                 (context, index) => ListTile(
-                                  leading: Icon(Icons.music_note_rounded),
+                                  key: ValueKey(playlist.tracks[index].id),
+                                  leading: ReorderableDragStartListener(
+                                    index: index,
+                                    child: const Icon(Icons.drag_handle_rounded),
+                                  ),
                                   title: Text(
-                                    p.basename(player.tracks[index].source),
+                                    p.basename(playlist.tracks[index].source),
                                     overflow: TextOverflow.ellipsis,
+                                  ),
+                                  trailing: IconButton(
+                                    icon: const Icon(
+                                      Icons.delete_outline_rounded,
+                                    ),
+                                    tooltip: 'Retirer',
+                                    onPressed:
+                                        () => setState(
+                                          () => playlist.removeTrack(index),
+                                        ),
                                   ),
                                 ),
                           )
-                          : Container(),
+                          : Center(
+                            child: Text('Glissez des fichiers ici'),
+                          ),
             ),
       );
     }(),
@@ -164,21 +280,25 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
                       Row(
                         children: [
                           FloatingActionButton(
-                            onPressed: () => (),
+                            heroTag: null,
+                            tooltip: 'Charger une playlist',
+                            onPressed: _loadPlaylistDialog,
                             child: Icon(Icons.library_music_rounded, size: 30),
                           ),
                           Expanded(
                             child: Padding(
                               padding: const EdgeInsets.all(8.0),
                               child: Text(
-                                player.playlistName,
+                                playlist.name,
                                 style: TextStyle(fontSize: 20),
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
                           ),
                           FloatingActionButton(
-                            onPressed: () => (),
+                            heroTag: null,
+                            tooltip: 'Sauvegarder la playlist',
+                            onPressed: _savePlaylistDialog,
                             child: Icon(Icons.save_rounded, size: 30),
                           ),
                         ],
@@ -201,6 +321,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
                               Row(
                                 children: [
                                   FloatingActionButton(
+                                    heroTag: null,
                                     onPressed: () => _pickDirectory(),
                                     child: Icon(Icons.folder_rounded),
                                   ),

@@ -63,13 +63,26 @@ class UserSettings {
 
   static Future<void> setCurrentPlaylist(PlayerType type, Playlist playlist) async {
     _prefs = await SharedPreferences.getInstance();
+    // Playlists are stored on disk as `<name>.json`, so we persist the name
+    // (not the id) to be able to reload it with [Playlist.fromFile].
     switch (type) {
       case PlayerType.ambiance:
-        _prefs.setString('ambiance_current_playlist', playlist.id);
+        _prefs.setString('ambiance_current_playlist', playlist.name);
       case PlayerType.music:
-        _prefs.setString('music_current_playlist', playlist.id);
+        _prefs.setString('music_current_playlist', playlist.name);
       case PlayerType.effect:
-        _prefs.setString('effect_current_playlist', playlist.id);
+        _prefs.setString('effect_current_playlist', playlist.name);
     }
+  }
+
+  /// Whether fade-in / fade-out transitions are enabled (global setting).
+  static Future<bool> getFadeEnabled() async {
+    _prefs = await SharedPreferences.getInstance();
+    return _prefs.getBool('fade_enabled') ?? true;
+  }
+
+  static Future<void> setFadeEnabled(bool enabled) async {
+    _prefs = await SharedPreferences.getInstance();
+    await _prefs.setBool('fade_enabled', enabled);
   }
 }
