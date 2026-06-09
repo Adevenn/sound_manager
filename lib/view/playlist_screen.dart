@@ -7,7 +7,6 @@ import 'package:sound_manager/model.dart';
 import 'package:sound_manager/view/loading.dart';
 import 'package:sound_manager/view/theme/app_theme.dart';
 
-//TODO: Show actual track & update state if the track changes during the screen is open
 class PlaylistScreen extends StatefulWidget {
   final AudioPlayerManager player;
   PlaylistScreen({required this.player, super.key});
