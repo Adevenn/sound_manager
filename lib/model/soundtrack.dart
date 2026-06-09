@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:sound_manager/model/soundtrack.enum.dart';
 import 'package:path/path.dart' as p;
 
@@ -49,6 +51,13 @@ class Soundtrack {
     'colorIndex': colorIndex,
     'iconIndex': iconIndex,
   };
+
+  /// Whether the underlying audio file is still present on disk. Always true
+  /// for non-local (url) sources, which can't be checked this way.
+  Future<bool> exists() async {
+    if (type != SoundtrackType.local) return true;
+    return File(source).exists();
+  }
 
   ///Compare 2 soundtracks. Returns true if identical.
   bool compare(Soundtrack other) =>

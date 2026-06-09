@@ -5,8 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:sound_manager/model.dart';
 import 'package:sound_manager/view/loading.dart';
+import 'package:sound_manager/view/theme/app_theme.dart';
 
-//TODO: Show actual track & update state if the track changes during the screen is open
 class PlaylistScreen extends StatefulWidget {
   final AudioPlayerManager player;
   PlaylistScreen({required this.player, super.key});
@@ -20,13 +20,28 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
   late Playlist playlist = widget.player.playlist;
   ValueNotifier<Directory?> directory = ValueNotifier(null);
 
+  Color get _accent => player.type.style.color;
+
   // Created once: building the future inside build() would re-run it on every
   // rebuild (and previously re-initialised a late-final field, which threw).
   late final Future<void> _settingsFuture = _initSettings();
 
   Future<void> _initSettings() async {
-    var path = await UserSettings.getPlayerSourceDirectory(player.type);
+    var path = UserSettings.getPlayerSourceDirectory(player.type);
     directory.value = path == null ? null : Directory(path);
+    await _scanMissing();
+  }
+
+  /// Sources in the working playlist whose file is missing on disk, refreshed
+  /// after any edit so broken tracks are flagged in the list.
+  Set<String> _missingSources = {};
+
+  Future<void> _scanMissing() async {
+    final missing = <String>{};
+    for (final track in playlist.tracks) {
+      if (!await track.exists()) missing.add(track.source);
+    }
+    if (mounted) setState(() => _missingSources = missing);
   }
 
   /// Prompts for a name then saves the working playlist to disk and remembers
@@ -58,8 +73,8 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
           ),
     );
     if (name == null || name.isEmpty) return;
-    await playlist.saveAs(name);
-    await UserSettings.setCurrentPlaylist(player.type, playlist);
+    await PlaylistRepository.saveAs(playlist, name);
+    await UserSettings.setCurrentPlaylist(player.type, name);
     if (mounted) {
       setState(() {});
       ScaffoldMessenger.of(
@@ -71,7 +86,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
   /// Lets the user pick a saved playlist (or delete one) and load it as the
   /// working playlist.
   Future<void> _loadPlaylistDialog() async {
-    final names = await Playlist.listAll();
+    final names = await PlaylistRepository.listAll();
     if (!mounted) return;
     if (names.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -100,7 +115,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
                               icon: const Icon(Icons.delete_outline_rounded),
                               tooltip: 'Delete',
                               onPressed: () async {
-                                await Playlist.delete(name);
+                                await PlaylistRepository.delete(name);
                                 names.remove(name);
                                 setDialogState(() {});
                               },
@@ -119,9 +134,23 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
           ),
     );
     if (chosen == null) return;
-    final loaded = await Playlist.fromFile(chosen);
-    await UserSettings.setCurrentPlaylist(player.type, loaded);
-    if (mounted) setState(() => playlist = loaded);
+    final Playlist loaded;
+    try {
+      loaded = await PlaylistRepository.load(chosen);
+    } catch (_) {
+      // Corrupted or unreadable file: report instead of crashing the dialog.
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not load playlist "$chosen"')),
+        );
+      }
+      return;
+    }
+    await UserSettings.setCurrentPlaylist(player.type, chosen);
+    if (mounted) {
+      setState(() => playlist = loaded);
+      await _scanMissing();
+    }
   }
 
   Future<void> _pickDirectory() async {
@@ -176,7 +205,17 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
               ),
               childWhenDragging: ListTile(),
               child: InkWell(
-                onTap: () => (),
+                // Second way to add a track (besides drag & drop): a single
+                // click appends it to the working playlist.
+                onTap: () {
+                  setState(() => playlist.addSoundtrack(files[index]));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      duration: const Duration(milliseconds: 900),
+                      content: Text('Added "${p.basename(files[index])}"'),
+                    ),
+                  );
+                },
                 borderRadius: BorderRadius.circular(12.0),
                 child: ListTile(
                   leading: Icon(Icons.music_note_rounded),
@@ -184,6 +223,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
                     p.basename(files[index]),
                     overflow: TextOverflow.ellipsis,
                   ),
+                  trailing: Icon(Icons.add_circle_outline_rounded, color: _accent),
                 ),
               ),
             ),
@@ -194,10 +234,10 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
   Widget get _playlistContent => Expanded(
     child: () {
       var isHover = ValueNotifier<bool>(false);
-      return DragTarget(
-        onWillAcceptWithDetails: <String>(i) => isHover.value = true,
+      return DragTarget<String>(
+        onWillAcceptWithDetails: (i) => isHover.value = true,
         onLeave: (i) => isHover.value = false,
-        onAcceptWithDetails: <String>(i) async {
+        onAcceptWithDetails: (i) async {
           final draggedPath = i.data;
           if (await File(draggedPath).exists()) {
             setState(() => playlist.addSoundtrack(draggedPath));
@@ -225,35 +265,125 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
                             ),
                           )
                           : playlist.isNotEmpty
-                          ? ReorderableListView.builder(
-                            buildDefaultDragHandles: false,
-                            itemCount: playlist.length,
-                            onReorder:
-                                (oldIndex, newIndex) => setState(
-                                  () =>
-                                      playlist.reorderTrack(oldIndex, newIndex),
-                                ),
-                            itemBuilder:
-                                (context, index) => ListTile(
-                                  key: ValueKey(playlist.tracks[index].id),
-                                  leading: ReorderableDragStartListener(
-                                    index: index,
-                                    child: const Icon(Icons.drag_handle_rounded),
-                                  ),
-                                  title: Text(
-                                    p.basename(playlist.tracks[index].source),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  trailing: IconButton(
-                                    icon: const Icon(
-                                      Icons.delete_outline_rounded,
-                                    ),
-                                    tooltip: 'Remove',
-                                    onPressed:
-                                        () => setState(
-                                          () => playlist.removeTrack(index),
+                          // Live-refresh the "now playing" marker if the track
+                          // changes while this editor is open.
+                          ? ListenableBuilder(
+                            listenable: Listenable.merge([
+                              player.path,
+                              player.playlist.trackIndex,
+                            ]),
+                            builder:
+                                (context, _) => ReorderableListView.builder(
+                                  buildDefaultDragHandles: false,
+                                  itemCount: playlist.length,
+                                  // Visible feedback while dragging a row:
+                                  // accent-tinted, bordered, lifted card.
+                                  proxyDecorator:
+                                      (child, index, animation) => Material(
+                                        color: Colors.transparent,
+                                        child: Container(
+                                          decoration: BoxDecoration(
+                                            color: _accent.withValues(
+                                              alpha: 0.20,
+                                            ),
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                            border: Border.all(
+                                              color: _accent,
+                                              width: 1.5,
+                                            ),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.black.withValues(
+                                                  alpha: 0.4,
+                                                ),
+                                                blurRadius: 12,
+                                                offset: const Offset(0, 4),
+                                              ),
+                                            ],
+                                          ),
+                                          child: child,
                                         ),
-                                  ),
+                                      ),
+                                  onReorderItem:
+                                      (oldIndex, newIndex) => setState(
+                                        () => playlist.reorderTrack(
+                                          oldIndex,
+                                          newIndex,
+                                        ),
+                                      ),
+                                  itemBuilder: (context, index) {
+                                    final track = playlist.tracks[index];
+                                    final playing =
+                                        track.id ==
+                                        player.playlist.actualSoundtrack?.id;
+                                    final missing = _missingSources.contains(
+                                      track.source,
+                                    );
+                                    final errorColor =
+                                        Theme.of(context).colorScheme.error;
+                                    return ListTile(
+                                      key: ValueKey(track.id),
+                                      selected: playing,
+                                      selectedColor: _accent,
+                                      selectedTileColor: _accent.withValues(
+                                        alpha: 0.12,
+                                      ),
+                                      leading: ReorderableDragStartListener(
+                                        index: index,
+                                        child: Icon(
+                                          missing
+                                              ? Icons.error_outline_rounded
+                                              : Icons.drag_handle_rounded,
+                                          color:
+                                              missing
+                                                  ? errorColor
+                                                  : (playing ? _accent : null),
+                                        ),
+                                      ),
+                                      title: Text(
+                                        p.basename(track.source),
+                                        overflow: TextOverflow.ellipsis,
+                                        style:
+                                            missing
+                                                ? TextStyle(color: errorColor)
+                                                : null,
+                                      ),
+                                      subtitle:
+                                          missing
+                                              ? Text(
+                                                'File not found',
+                                                style: TextStyle(
+                                                  color: errorColor,
+                                                  fontSize: 11,
+                                                ),
+                                              )
+                                              : null,
+                                      trailing: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          if (playing)
+                                            Icon(
+                                              Icons.equalizer_rounded,
+                                              color: _accent,
+                                              size: 20,
+                                            ),
+                                          IconButton(
+                                            icon: const Icon(
+                                              Icons.delete_outline_rounded,
+                                            ),
+                                            tooltip: 'Remove',
+                                            onPressed:
+                                                () => setState(
+                                                  () =>
+                                                      playlist.removeTrack(index),
+                                                ),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  },
                                 ),
                           )
                           : Center(
@@ -276,9 +406,12 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
               onPressed: () => Navigator.of(context).pop(playlist),
               icon: Icon(Icons.arrow_back_rounded),
             ),
-            title: Text(
-              player.type.name.capitalize(),
-              style: TextStyle(fontSize: 20),
+            title: Row(
+              children: [
+                Icon(player.type.style.icon, color: player.type.style.color),
+                const SizedBox(width: 8),
+                Text(player.type.style.label, style: TextStyle(fontSize: 20)),
+              ],
             ),
           ),
           body: Padding(

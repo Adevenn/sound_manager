@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Sound Manager — disposition de la barre de contrôle</title>
+<style>
+  :root {
+    --bg: #1a1714;
+    --surface: #272320;
+    --surface-2: #322d28;
+    --line: #46403a;
+    --text: #ece6df;
+    --muted: #9c948a;
+    --accent: #e0a458;      /* Music = ambre */
+    --accent-amb: #8b95e8;  /* Ambiance = indigo */
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 32px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Segoe UI", Roboto, system-ui, sans-serif;
+  }
+  h1 { font-size: 20px; font-weight: 600; letter-spacing: .3px; }
+  h2 { font-size: 14px; color: var(--muted); font-weight: 600; margin: 28px 0 10px; text-transform: uppercase; letter-spacing: .6px; }
+  .note { color: var(--muted); font-size: 13px; max-width: 720px; line-height: 1.5; }
+  .bad { color: #e2756b; }
+  .good { color: #6ec98a; }
+
+  /* A panel = one channel column */
+  .panel {
+    width: 460px;
+    background: var(--surface);
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1px solid #00000040;
+  }
+  .panel .head {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 12px;
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    border-bottom: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  }
+  .panel .head .title { font-weight: 700; color: var(--accent); }
+  .panel .head .pl { margin-left: auto; font-style: italic; color: var(--muted); font-size: 13px; }
+  .list { padding: 10px 14px; color: var(--muted); font-size: 13px; min-height: 38px; }
+
+  /* control bar */
+  .bar { padding: 6px 12px 10px; }
+  .row { display: flex; align-items: center; }
+  .center { justify-content: center; }
+  .transport { gap: 4px; }
+  .icon {
+    width: 38px; height: 38px; border-radius: 50%;
+    display: grid; place-items: center;
+    color: var(--text); font-size: 18px;
+  }
+  .icon.muted { color: var(--muted); }
+  .icon.accent { color: var(--accent); }
+  .icon.big { font-size: 22px; }
+  .fab {
+    width: 44px; height: 44px; border-radius: 14px;
+    background: var(--accent); color: #2a2118;
+    display: grid; place-items: center; font-size: 18px;
+    box-shadow: 0 3px 8px #00000055;
+  }
+  .time { font-size: 12px; color: var(--muted); min-width: 52px; }
+  .time.r { text-align: right; }
+  /* horizontal slider */
+  .slider { flex: 1; height: 4px; border-radius: 2px; background: #4a443d; position: relative; margin: 0 8px; }
+  .slider .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 38%; background: var(--accent); border-radius: 2px; }
+  .slider .knob { position: absolute; left: 38%; top: 50%; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); transform: translate(-50%, -50%); }
+  /* vertical slider */
+  .vslider { width: 4px; height: 70px; border-radius: 2px; background: #4a443d; position: relative; }
+  .vslider .fill { position: absolute; left: 0; right: 0; bottom: 0; height: 60%; background: var(--accent); border-radius: 2px; }
+  .vslider .knob { position: absolute; left: 50%; bottom: 60%; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); transform: translate(-50%, 50%); }
+
+  .vol-compact { width: 140px; }
+  .label-mini { font-size: 11px; color: var(--muted); margin: 2px 0 0 4px; }
+  .tag { display:inline-block; font-size:11px; padding:2px 8px; border-radius:10px; background: var(--surface-2); color: var(--muted); margin-left:8px; }
+</style>
+</head>
+<body>
+  <h1>Barre de contrôle d'un canal — dispositions</h1>
+  <p class="note">Démo de mise en page <b>uniquement</b> (pas l'app réelle). Le canal montré est « Music » (accent ambre).
+  Chaque encadré = le bas d'une colonne de player.</p>
+
+  <!-- ============ AVANT ============ -->
+  <h2 class="bad">Avant — une seule Row surchargée (1:4:1)</h2>
+  <p class="note">Titre · transport+timer · volume étaient compressés sur <b>une seule ligne horizontale</b>. En demi-largeur,
+  les 7 boutons débordaient. Le volume utilisait un <code>RotatedBox(quarterTurns: 4)</code> = rotation de 360° = aucun effet (slider resté horizontal, code mort).</p>
+  <div class="panel">
+    <div class="list">♪ track 1 &nbsp;·&nbsp; ♪ track 2 …</div>
+    <div class="bar">
+      <div class="row">
+        <div class="title" style="color:var(--accent);font-weight:700;min-width:70px">Music</div>
+        <div class="row transport center" style="flex:4">
+          <div class="icon">🔁</div><div class="icon">🔀</div><div class="icon big">⏮</div>
+          <div class="icon big">⏯</div><div class="icon big">⏭</div><div class="icon">〰</div><div class="fab">≣</div>
+        </div>
+        <div class="row" style="flex:1;gap:6px"><div class="icon muted">🔊</div><div class="slider"><div class="fill"></div><div class="knob"></div></div></div>
+      </div>
+      <div class="label-mini">⟵ tout sur une ligne : à l'étroit, déborde, volume non fonctionnel en vertical</div>
+    </div>
+  </div>
+
+  <!-- ============ OPTION A ============ -->
+  <h2 class="good">Option A — transport centré + timer ; volume compact à droite <span class="tag">implémenté</span></h2>
+  <p class="note">Ligne 1 : transport centré (passe à la ligne si trop étroit). Ligne 2 : timer (gauche) + <b>volume compact horizontal</b> (droite).
+  Le <code>RotatedBox</code> inutile est retiré, le slider est teinté à la couleur du canal.</p>
+  <div class="panel">
+    <div class="head"><span>🎵</span><span class="title">Music</span><span class="pl">forest_battle.json</span></div>
+    <div class="list">♪ track 1 &nbsp;·&nbsp; ♪ track 2 …</div>
+    <div class="bar">
+      <div class="row transport center">
+        <div class="icon accent">🔁</div><div class="icon muted">🔀</div><div class="icon big">⏮</div>
+        <div class="icon big">⏯</div><div class="icon big">⏭</div><div class="icon accent">〰</div><div class="fab">≣</div>
+      </div>
+      <div class="row" style="margin-top:4px">
+        <div class="time">0:48</div>
+        <div class="slider"><div class="fill"></div><div class="knob"></div></div>
+        <div class="time r">3:12</div>
+        <div class="row vol-compact" style="gap:6px;margin-left:10px"><div class="icon accent">🔊</div><div class="slider"><div class="fill" style="width:60%"></div><div class="knob" style="left:60%"></div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ OPTION B ============ -->
+  <h2>Option B — vrai slider de volume vertical à droite</h2>
+  <p class="note">Variante : transport + timer empilés à gauche, et un <b>vrai slider vertical</b> (fonctionnel, pas un RotatedBox cassé) collé à droite,
+  facile à régler au pouce comme une table de mixage. Prend un peu plus de hauteur.</p>
+  <div class="panel">
+    <div class="head"><span>🎵</span><span class="title">Music</span><span class="pl">forest_battle.json</span></div>
+    <div class="list">♪ track 1 &nbsp;·&nbsp; ♪ track 2 …</div>
+    <div class="bar">
+      <div class="row" style="align-items:stretch;gap:12px">
+        <div style="flex:1">
+          <div class="row transport center">
+            <div class="icon accent">🔁</div><div class="icon muted">🔀</div><div class="icon big">⏮</div>
+            <div class="icon big">⏯</div><div class="icon big">⏭</div><div class="icon accent">〰</div><div class="fab">≣</div>
+          </div>
+          <div class="row" style="margin-top:4px">
+            <div class="time">0:48</div>
+            <div class="slider"><div class="fill"></div><div class="knob"></div></div>
+            <div class="time r">3:12</div>
+          </div>
+        </div>
+        <div class="row" style="flex-direction:column;align-items:center;gap:4px;justify-content:center">
+          <div class="icon accent">🔊</div>
+          <div class="vslider"><div class="fill"></div><div class="knob"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="note" style="margin-top:28px">Dis-moi si tu préfères <b>A</b> (déjà en place) ou <b>B</b>, je bascule le code en conséquence.</p>
+</body>
+</html>

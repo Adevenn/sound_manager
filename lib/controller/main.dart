@@ -1,19 +1,30 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:sound_manager/model.dart';
+import 'package:sound_manager/view/theme/app_theme.dart';
 import 'package:sound_manager/view/settings_screen.dart';
 import 'package:sound_manager/view/widget/audio_player_widget.dart';
 import 'package:sound_manager/view/widget/effects_player_widget.dart';
-import 'package:window_size/window_size.dart';
+import 'package:window_manager/window_manager.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await AudioSettings.instance.load();
+  // Load the shared preferences once so all settings classes can read/write
+  // synchronously afterwards.
+  await Prefs.init();
+  AudioSettings.instance.load();
+  ShortcutSettings.instance.load();
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
-    setWindowTitle('Sound Manager');
-    setWindowMinSize(const Size(800, 600));
+    await windowManager.ensureInitialized();
+    const windowOptions = WindowOptions(
+      title: 'Sound Manager',
+      minimumSize: Size(800, 600),
+    );
+    await windowManager.waitUntilReadyToShow(windowOptions, () async {
+      await windowManager.show();
+      await windowManager.focus();
+    });
   }
   runApp(SoundManagerApp());
 }
@@ -23,7 +34,7 @@ class SoundManagerApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => MaterialApp(
-    theme: ThemeData.dark(useMaterial3: true),
+    theme: AppTheme.dark(),
     debugShowCheckedModeBanner: false,
     home: SoundManagerScreen(),
   );
@@ -74,7 +85,7 @@ class _SoundManagerScreenState extends State<SoundManagerScreen> {
     final playlists = <String, String>{};
     final volumes = <String, double>{};
     for (final m in _managers) {
-      if (m.playlist.isNotEmpty) await m.playlist.save();
+      if (m.playlist.isNotEmpty) await PlaylistRepository.save(m.playlist);
       playlists[m.type.name] = m.playlist.name;
       volumes[m.type.name] = m.volume.value;
     }
@@ -198,21 +209,12 @@ class _SoundManagerScreenState extends State<SoundManagerScreen> {
   }
 
   Map<ShortcutActivator, VoidCallback> get _shortcuts {
-    const digits = [
-      LogicalKeyboardKey.digit1,
-      LogicalKeyboardKey.digit2,
-      LogicalKeyboardKey.digit3,
-      LogicalKeyboardKey.digit4,
-      LogicalKeyboardKey.digit5,
-      LogicalKeyboardKey.digit6,
-      LogicalKeyboardKey.digit7,
-      LogicalKeyboardKey.digit8,
-      LogicalKeyboardKey.digit9,
-    ];
+    final s = ShortcutSettings.instance;
     return {
-      const SingleActivator(LogicalKeyboardKey.space): togglePlayPauseAll,
-      for (int i = 0; i < digits.length; i++)
-        SingleActivator(digits[i]): () => _triggerEffect(i),
+      SingleActivator(s.playPauseAll): togglePlayPauseAll,
+      for (int i = 0; i < s.effectKeys.length; i++)
+        if (s.effectKeys[i] != null)
+          SingleActivator(s.effectKeys[i]!): () => _triggerEffect(i),
     };
   }
 
@@ -255,18 +257,30 @@ class _SoundManagerScreenState extends State<SoundManagerScreen> {
         const SizedBox(width: 8),
       ],
     ),
-    body: CallbackShortcuts(
-      bindings: _shortcuts,
-      child: Focus(
-        autofocus: true,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Expanded(child: AudioPlayerWidget(player: ambiancePlayer)),
-            EffectsPlayerWidget(player: effectPlayer),
-            Expanded(child: AudioPlayerWidget(player: musicPlayer)),
-          ],
-        ),
+    body: ListenableBuilder(
+      listenable: ShortcutSettings.instance.revision,
+      builder:
+          (context, child) => CallbackShortcuts(
+            bindings: _shortcuts,
+            child: Focus(autofocus: true, child: child!),
+          ),
+      child: Column(
+        children: [
+          // Ambiance and Music run in parallel — side by side, each with its
+          // own tall track list and controls.
+          Expanded(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(child: AudioPlayerWidget(player: ambiancePlayer)),
+                Expanded(child: AudioPlayerWidget(player: musicPlayer)),
+              ],
+            ),
+          ),
+          // Effects: a full-width soundboard docked at the bottom, always
+          // visible.
+          EffectsPlayerWidget(player: effectPlayer),
+        ],
       ),
     ),
   );
