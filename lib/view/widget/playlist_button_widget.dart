@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:sound_manager/model.dart';
+import 'package:sound_manager/view/theme/app_theme.dart';
 import 'package:sound_manager/view/playlist_screen.dart';
 
 class PlaylistButtonWidget extends StatelessWidget {
@@ -16,6 +17,9 @@ class PlaylistButtonWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) => FloatingActionButton(
     heroTag: null,
+    tooltip: 'Playlist',
+    backgroundColor: player.type.style.color,
+    foregroundColor: contrastOn(player.type.style.color),
     onPressed: () async {
       var newPlaylist = await showDialog<Playlist>(
         context: context,
@@ -37,7 +41,7 @@ class PlaylistButtonWidget extends StatelessWidget {
       'assets/song_list.png',
       height: 24,
       width: 24,
-      color: Colors.white60,
+      color: contrastOn(player.type.style.color),
       filterQuality: FilterQuality.medium,
     ),
   );

@@ -69,6 +69,7 @@ class Playlist {
     return true;
   }
   bool get isNotEmpty => _tracks.isNotEmpty;
+  bool get isEmpty => _tracks.isEmpty;
   bool get isPreviousTrack => _trackIndex.value > 0;
   bool get isNextTrack => _trackIndex.value < _tracks.length - 1;
   Soundtrack? get actualSoundtrack {

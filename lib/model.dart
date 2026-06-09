@@ -6,6 +6,7 @@ export 'model/effect_style.dart';
 export 'model/player_type.enum.dart';
 export 'model/playlist.dart';
 export 'model/scene.dart';
+export 'model/shortcut_settings.dart';
 export 'model/soundtrack.dart';
 export 'model/soundtrack.enum.dart';
 export 'model/string_extension.dart';

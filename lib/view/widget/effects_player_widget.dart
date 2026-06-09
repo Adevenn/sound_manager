@@ -2,7 +2,9 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:sound_manager/model.dart';
 import 'package:sound_manager/view/loading.dart';
+import 'package:sound_manager/view/theme/app_theme.dart';
 import 'package:sound_manager/view/widget/audio_volume_widget.dart';
+import 'package:sound_manager/view/widget/effect_chip_widget.dart';
 import 'package:sound_manager/view/widget/playlist_button_widget.dart';
 
 class EffectsPlayerWidget extends StatefulWidget {
@@ -40,52 +42,6 @@ class _AudioPlayerWidgetState extends State<EffectsPlayerWidget> {
   Future<void> _stopLoop(Soundtrack track) async {
     final p = _held.remove(track.id);
     if (p != null) await player.stopLoopEffect(p);
-  }
-
-  Widget _effectChip(Soundtrack track) {
-    final color = EffectStyle.colorAt(track.colorIndex);
-    final icon = EffectStyle.iconAt(track.iconIndex);
-    final content = Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: color ?? Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 18),
-          const SizedBox(width: 6),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 140),
-            child: Text(track.name, overflow: TextOverflow.ellipsis),
-          ),
-          if (track.loop) ...[
-            const SizedBox(width: 4),
-            const Icon(Icons.touch_app_rounded, size: 14),
-          ],
-        ],
-      ),
-    );
-
-    // Right-click (or long-press) always opens the per-effect configuration.
-    if (track.loop) {
-      // Press-and-hold to loop the sound while held.
-      return GestureDetector(
-        onTapDown: (_) => _startLoop(track),
-        onTapUp: (_) => _stopLoop(track),
-        onTapCancel: () => _stopLoop(track),
-        onSecondaryTap: () => _configEffect(track),
-        onLongPress: () {}, // swallow long-press so hold doesn't trigger config
-        child: content,
-      );
-    }
-    return GestureDetector(
-      onTap: () => player.playEffect(track),
-      onSecondaryTap: () => _configEffect(track),
-      onLongPress: () => _configEffect(track),
-      child: content,
-    );
   }
 
   Future<void> _configEffect(Soundtrack track) async {
@@ -136,8 +92,12 @@ class _AudioPlayerWidgetState extends State<EffectsPlayerWidget> {
                                     border: Border.all(
                                       color:
                                           track.colorIndex == i
-                                              ? Colors.white
-                                              : Colors.white24,
+                                              ? Theme.of(
+                                                context,
+                                              ).colorScheme.onSurface
+                                              : Theme.of(
+                                                context,
+                                              ).colorScheme.outlineVariant,
                                       width: track.colorIndex == i ? 3 : 1,
                                     ),
                                   ),
@@ -154,7 +114,7 @@ class _AudioPlayerWidgetState extends State<EffectsPlayerWidget> {
                                 icon: Icon(EffectStyle.icons[i]),
                                 color:
                                     track.iconIndex == i
-                                        ? Colors.green[400]
+                                        ? PlayerType.effect.style.color
                                         : null,
                                 onPressed:
                                     () => setDialog(() => track.iconIndex = i),
@@ -178,6 +138,56 @@ class _AudioPlayerWidgetState extends State<EffectsPlayerWidget> {
     if (mounted) setState(() {});
   }
 
+  Color get _accent => player.type.style.color;
+
+  /// Accent strip identifying the soundboard, with the loaded playlist name,
+  /// channel volume and the playlist editor button.
+  Widget _effectsHeader(BuildContext context) {
+    final name = player.playlist.name.isEmpty ? '—' : player.playlist.name;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 2, 8, 2),
+      decoration: BoxDecoration(
+        color: _accent.withValues(alpha: 0.14),
+        border: Border(
+          bottom: BorderSide(color: _accent.withValues(alpha: 0.55), width: 2),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(player.type.style.icon, color: _accent, size: 20),
+          const SizedBox(width: 8),
+          Text(
+            player.type.style.label,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: _accent,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              name,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 13,
+                fontStyle: FontStyle.italic,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          SizedBox(width: 150, child: AudioVolumeWidget(player: player)),
+          const SizedBox(width: 4),
+          PlaylistButtonWidget(
+            player: player,
+            callback: () => setState(() => ()),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder(
@@ -189,50 +199,47 @@ class _AudioPlayerWidgetState extends State<EffectsPlayerWidget> {
             listenable: player.playlistRevision,
             builder:
                 (context, child) => Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          flex: 1,
-                          child: Row(
-                            children: [
-                              Text(
-                                player.type.name.capitalize(),
-                                style: TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              PlaylistButtonWidget(
-                                player: player,
-                                callback: () => setState(() => ()),
-                              ),
-                            ],
+                  clipBehavior: Clip.antiAlias,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _effectsHeader(context),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(
+                            minHeight: 64,
+                            maxHeight: 180,
                           ),
-                        ),
-                        Expanded(
-                          flex: 4,
                           child:
-                              player.playlist.isNotEmpty
-                                  ? SingleChildScrollView(
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 8.0,
+                              player.playlist.isEmpty
+                                  ? const Center(child: Text('No effect'))
+                                  : Align(
+                                    alignment: Alignment.topLeft,
+                                    child: SingleChildScrollView(
+                                      child: Wrap(
+                                        spacing: 8.0,
+                                        runSpacing: 8.0,
+                                        children: [
+                                          for (final track in player.tracks)
+                                            EffectChip(
+                                              track: track,
+                                              onTrigger:
+                                                  () =>
+                                                      player.playEffect(track),
+                                              onConfig:
+                                                  () => _configEffect(track),
+                                              onHoldStart:
+                                                  () => _startLoop(track),
+                                              onHoldEnd: () => _stopLoop(track),
+                                            ),
+                                        ],
+                                      ),
                                     ),
-                                    child: Wrap(
-                                      spacing: 8.0,
-                                      runSpacing: 8.0,
-                                      children: [
-                                        for (final track in player.tracks)
-                                          _effectChip(track),
-                                      ],
-                                    ),
-                                  )
-                                  : Center(child: Text('No effect')),
+                                  ),
                         ),
-                        Expanded(child: AudioVolumeWidget(player: player)),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
           );

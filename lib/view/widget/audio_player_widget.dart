@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:sound_manager/model.dart';
 import 'package:sound_manager/view/loading.dart';
+import 'package:sound_manager/view/theme/app_theme.dart';
 import 'package:sound_manager/view/widget/audio_volume_widget.dart';
 import 'package:sound_manager/view/widget/playlist_button_widget.dart';
 
@@ -15,6 +16,10 @@ class AudioPlayerWidget extends StatefulWidget {
 class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
   AudioPlayerManager get player => widget.player;
   Playlist get playlist => widget.player.playlist;
+
+  /// Accent colour that gives this channel its identity (active toggles,
+  /// selected track, header).
+  Color get _accent => player.type.style.color;
 
   late final Future<void> _settingsFuture = player.loadSettings();
 
@@ -66,7 +71,10 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
                 : Icons.repeat_rounded,
             size: 28,
           ),
-          color: mode == LoopMode.none ? Colors.white60 : Colors.green[400],
+          color:
+              mode == LoopMode.none
+                  ? Theme.of(context).colorScheme.onSurfaceVariant
+                  : _accent,
           onPressed: () => playlist.cycleLoop(),
         ),
   );
@@ -77,7 +85,8 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
         (context, on, child) => IconButton(
           tooltip: 'Shuffle',
           icon: Icon(Icons.shuffle_rounded, size: 26),
-          color: on ? Colors.green[400] : Colors.white60,
+          color:
+              on ? _accent : Theme.of(context).colorScheme.onSurfaceVariant,
           onPressed: () => playlist.toggleShuffle(),
         ),
   );
@@ -88,7 +97,8 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
         (context, fade, child) => IconButton(
           tooltip: 'Fade',
           icon: Icon(Icons.graphic_eq_rounded, size: 28),
-          color: fade ? Colors.green[400] : Colors.white60,
+          color:
+              fade ? _accent : Theme.of(context).colorScheme.onSurfaceVariant,
           onPressed: () => player.toggleFade(),
         ),
   );
@@ -105,31 +115,158 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
                         children: [
                           Text(
                             position.toString().split('.').first,
-                            style: const TextStyle(fontSize: 14.0),
+                            style: const TextStyle(fontSize: 12.0),
                           ),
                           Expanded(
-                            child: Slider(
-                              onChanged: (value) {
-                                final position =
-                                    value * duration.inMilliseconds;
-                                player.seek(position);
-                              },
-                              value:
-                                  (position.inMilliseconds > 0 &&
-                                          position.inMilliseconds <
-                                              duration.inMilliseconds)
-                                      ? position.inMilliseconds /
-                                          duration.inMilliseconds
-                                      : 0.0,
+                            child: SliderTheme(
+                              data: SliderTheme.of(context).copyWith(
+                                activeTrackColor: _accent,
+                                thumbColor: _accent,
+                              ),
+                              child: Slider(
+                                onChanged: (value) {
+                                  final position =
+                                      value * duration.inMilliseconds;
+                                  player.seek(position);
+                                },
+                                value:
+                                    (position.inMilliseconds > 0 &&
+                                            position.inMilliseconds <
+                                                duration.inMilliseconds)
+                                        ? position.inMilliseconds /
+                                            duration.inMilliseconds
+                                        : 0.0,
+                              ),
                             ),
                           ),
                           Text(
                             duration.toString().split('.').first,
-                            style: const TextStyle(fontSize: 14.0),
+                            style: const TextStyle(fontSize: 12.0),
                           ),
                         ],
                       ),
             ),
+  );
+
+  /// Accent-tinted strip at the top of the panel: makes each channel a clearly
+  /// delimited box and surfaces the loaded playlist name.
+  Widget _channelHeader(BuildContext context) {
+    final name = playlist.name.isEmpty ? '—' : playlist.name;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: _accent.withValues(alpha: 0.14),
+        border: Border(
+          bottom: BorderSide(color: _accent.withValues(alpha: 0.55), width: 2),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(player.type.style.icon, color: _accent, size: 20),
+          const SizedBox(width: 8),
+          Text(
+            player.type.style.label,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: _accent,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              name,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                fontSize: 13,
+                fontStyle: FontStyle.italic,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Scrollable track list with the currently-playing track highlighted.
+  Widget _trackList() => ListenableBuilder(
+    // Rebuild on track change too: tapping a duplicate-named track changes the
+    // index but not the path, so listening to path alone would not refresh the
+    // selection.
+    listenable: Listenable.merge([player.path, playlist.trackIndex]),
+    builder: (BuildContext context, Widget? child) {
+      if (player.playlist.isEmpty) {
+        return const Center(child: Text('No track'));
+      }
+      return ListView.separated(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        itemCount: player.playlist.length,
+        separatorBuilder: (context, index) => const Divider(height: 1),
+        itemBuilder: (context, index) {
+          final track = player.playlist.tracks[index];
+          final playing = track.id == player.playlist.actualSoundtrack?.id;
+          return ListTile(
+            dense: true,
+            selected: playing,
+            selectedColor: _accent,
+            selectedTileColor: _accent.withValues(alpha: 0.12),
+            leading:
+                playing
+                    ? Icon(Icons.equalizer_rounded, color: _accent, size: 20)
+                    : const Icon(Icons.music_note_rounded, size: 20),
+            title: Text(
+              track.name,
+              style: const TextStyle(fontSize: 14),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 2,
+            ),
+            onTap: () => player.changeTrack(track),
+          );
+        },
+      );
+    },
+  );
+
+  /// Transport (centered) + a tight timer/volume line.
+  Widget _controlBar() => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+    child: ListenableBuilder(
+      // Listen to both playback state (play/pause icon) and the track index
+      // (prev/next enabled state), since skipping between two playing tracks
+      // leaves the state unchanged and would not trigger a rebuild.
+      listenable: Listenable.merge([player.state, playlist.trackIndex]),
+      builder:
+          (BuildContext context, Widget? child) => Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Wrap(
+                alignment: WrapAlignment.center,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  _loopButton,
+                  _shuffleButton,
+                  _previousTrack,
+                  _playPauseButton,
+                  _nextTrack,
+                  _fadeButton,
+                  PlaylistButtonWidget(
+                    player: player,
+                    callback: () => setState(() => ()),
+                  ),
+                ],
+              ),
+              Row(
+                children: [
+                  Expanded(child: _timer),
+                  SizedBox(width: 140, child: AudioVolumeWidget(player: player)),
+                ],
+              ),
+            ],
+          ),
+    ),
   );
 
   @override
@@ -141,104 +278,16 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
         return ListenableBuilder(
           listenable: player.playlistRevision,
           builder:
-              (context, child) => Column(
-            children: [
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: ListenableBuilder(
-                  // Rebuild on track change too: tapping a duplicate-named
-                  // track changes the index but not the path, so listening to
-                  // path alone would not refresh the selection.
-                  listenable: Listenable.merge([
-                    player.path,
-                    playlist.trackIndex,
-                  ]),
-                  builder:
-                      (BuildContext context, Widget? child) =>
-                          player.playlist.isNotEmpty
-                              ? ListView.separated(
-                                itemBuilder:
-                                    (context, index) => ListTile(
-                                      selected:
-                                          player.playlist.tracks[index].id ==
-                                          player.playlist.actualSoundtrack!.id,
-                                      selectedColor: Colors.green[400],
-                                      title: Text(
-                                        player.tracks[index].name,
-                                        style: TextStyle(fontSize: 14),
-                                        overflow: TextOverflow.ellipsis,
-                                        maxLines: 2,
-                                      ),
-                                      onTap:
-                                          () => player.changeTrack(
-                                            player.playlist.tracks[index],
-                                          ),
-                                    ),
-                                separatorBuilder: (context, index) => Divider(),
-                                itemCount: player.playlist.length,
-                              )
-                              : Center(child: Text("No track")),
-                ),
-              ),
-            ),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                child: Row(
+              (context, child) => Card(
+                clipBehavior: Clip.antiAlias,
+                child: Column(
                   children: [
-                    Expanded(
-                      flex: 1,
-                      child: Text(
-                        player.type.name.capitalize(),
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      flex: 4,
-                      child: ListenableBuilder(
-                        // Listen to both playback state (play/pause icon) and
-                        // the track index (prev/next enabled state), since
-                        // skipping between two playing tracks leaves the state
-                        // unchanged and would not trigger a rebuild.
-                        listenable: Listenable.merge([
-                          player.state,
-                          playlist.trackIndex,
-                        ]),
-                        builder:
-                            (BuildContext context, Widget? child) => Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    _loopButton,
-                                    _shuffleButton,
-                                    _previousTrack,
-                                    _playPauseButton,
-                                    _nextTrack,
-                                    _fadeButton,
-                                    PlaylistButtonWidget(
-                                      player: player,
-                                      callback: () => setState(() => ()),
-                                    ),
-                                  ],
-                                ),
-                                _timer,
-                              ],
-                            ),
-                      ),
-                    ),
-                    Expanded(child: AudioVolumeWidget(player: player)),
+                    _channelHeader(context),
+                    Expanded(child: _trackList()),
+                    _controlBar(),
                   ],
                 ),
               ),
-            ),
-          ],
-          ),
         );
       } else if (snapshot.hasError &&
           snapshot.connectionState == ConnectionState.done) {

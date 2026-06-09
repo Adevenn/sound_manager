@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:sound_manager/model.dart';
 import 'package:sound_manager/view/loading.dart';
+import 'package:sound_manager/view/theme/app_theme.dart';
 
 //TODO: Show actual track & update state if the track changes during the screen is open
 class PlaylistScreen extends StatefulWidget {
@@ -19,6 +20,8 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
   AudioPlayerManager get player => widget.player;
   late Playlist playlist = widget.player.playlist;
   ValueNotifier<Directory?> directory = ValueNotifier(null);
+
+  Color get _accent => player.type.style.color;
 
   // Created once: building the future inside build() would re-run it on every
   // rebuild (and previously re-initialised a late-final field, which threw).
@@ -176,7 +179,17 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
               ),
               childWhenDragging: ListTile(),
               child: InkWell(
-                onTap: () => (),
+                // Second way to add a track (besides drag & drop): a single
+                // click appends it to the working playlist.
+                onTap: () {
+                  setState(() => playlist.addSoundtrack(files[index]));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      duration: const Duration(milliseconds: 900),
+                      content: Text('Added "${p.basename(files[index])}"'),
+                    ),
+                  );
+                },
                 borderRadius: BorderRadius.circular(12.0),
                 child: ListTile(
                   leading: Icon(Icons.music_note_rounded),
@@ -184,6 +197,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
                     p.basename(files[index]),
                     overflow: TextOverflow.ellipsis,
                   ),
+                  trailing: Icon(Icons.add_circle_outline_rounded, color: _accent),
                 ),
               ),
             ),
@@ -225,35 +239,101 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
                             ),
                           )
                           : playlist.isNotEmpty
-                          ? ReorderableListView.builder(
-                            buildDefaultDragHandles: false,
-                            itemCount: playlist.length,
-                            onReorder:
-                                (oldIndex, newIndex) => setState(
-                                  () =>
-                                      playlist.reorderTrack(oldIndex, newIndex),
-                                ),
-                            itemBuilder:
-                                (context, index) => ListTile(
-                                  key: ValueKey(playlist.tracks[index].id),
-                                  leading: ReorderableDragStartListener(
-                                    index: index,
-                                    child: const Icon(Icons.drag_handle_rounded),
-                                  ),
-                                  title: Text(
-                                    p.basename(playlist.tracks[index].source),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  trailing: IconButton(
-                                    icon: const Icon(
-                                      Icons.delete_outline_rounded,
-                                    ),
-                                    tooltip: 'Remove',
-                                    onPressed:
-                                        () => setState(
-                                          () => playlist.removeTrack(index),
+                          // Live-refresh the "now playing" marker if the track
+                          // changes while this editor is open.
+                          ? ListenableBuilder(
+                            listenable: Listenable.merge([
+                              player.path,
+                              player.playlist.trackIndex,
+                            ]),
+                            builder:
+                                (context, _) => ReorderableListView.builder(
+                                  buildDefaultDragHandles: false,
+                                  itemCount: playlist.length,
+                                  // Visible feedback while dragging a row:
+                                  // accent-tinted, bordered, lifted card.
+                                  proxyDecorator:
+                                      (child, index, animation) => Material(
+                                        color: Colors.transparent,
+                                        child: Container(
+                                          decoration: BoxDecoration(
+                                            color: _accent.withValues(
+                                              alpha: 0.20,
+                                            ),
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                            border: Border.all(
+                                              color: _accent,
+                                              width: 1.5,
+                                            ),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.black.withValues(
+                                                  alpha: 0.4,
+                                                ),
+                                                blurRadius: 12,
+                                                offset: const Offset(0, 4),
+                                              ),
+                                            ],
+                                          ),
+                                          child: child,
                                         ),
-                                  ),
+                                      ),
+                                  onReorder:
+                                      (oldIndex, newIndex) => setState(
+                                        () => playlist.reorderTrack(
+                                          oldIndex,
+                                          newIndex,
+                                        ),
+                                      ),
+                                  itemBuilder: (context, index) {
+                                    final track = playlist.tracks[index];
+                                    final playing =
+                                        track.id ==
+                                        player.playlist.actualSoundtrack?.id;
+                                    return ListTile(
+                                      key: ValueKey(track.id),
+                                      selected: playing,
+                                      selectedColor: _accent,
+                                      selectedTileColor: _accent.withValues(
+                                        alpha: 0.12,
+                                      ),
+                                      leading: ReorderableDragStartListener(
+                                        index: index,
+                                        child: Icon(
+                                          Icons.drag_handle_rounded,
+                                          color: playing ? _accent : null,
+                                        ),
+                                      ),
+                                      title: Text(
+                                        p.basename(track.source),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      trailing: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          if (playing)
+                                            Icon(
+                                              Icons.equalizer_rounded,
+                                              color: _accent,
+                                              size: 20,
+                                            ),
+                                          IconButton(
+                                            icon: const Icon(
+                                              Icons.delete_outline_rounded,
+                                            ),
+                                            tooltip: 'Remove',
+                                            onPressed:
+                                                () => setState(
+                                                  () =>
+                                                      playlist.removeTrack(index),
+                                                ),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  },
                                 ),
                           )
                           : Center(
@@ -276,9 +356,12 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
               onPressed: () => Navigator.of(context).pop(playlist),
               icon: Icon(Icons.arrow_back_rounded),
             ),
-            title: Text(
-              player.type.name.capitalize(),
-              style: TextStyle(fontSize: 20),
+            title: Row(
+              children: [
+                Icon(player.type.style.icon, color: player.type.style.color),
+                const SizedBox(width: 8),
+                Text(player.type.style.label, style: TextStyle(fontSize: 20)),
+              ],
             ),
           ),
           body: Padding(
