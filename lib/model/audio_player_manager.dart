@@ -139,16 +139,15 @@ class AudioPlayerManager {
   }
 
   void changeTrack(Soundtrack? track) {
-    if (track != null) {
-      for (int i = 0; i < playlist.length; i++) {
-        if (track.id == playlist.tracks[i].id) {
-          playlist.changeTrack(i);
-          _loadTrack();
-          play();
-        }
-      }
-    } else {
+    if (track == null) {
       path.value = null;
+      return;
+    }
+    final index = playlist.tracks.indexWhere((t) => t.id == track.id);
+    if (index != -1) {
+      playlist.changeTrack(index);
+      _loadTrack();
+      play();
     }
   }
 
@@ -222,6 +221,10 @@ class AudioPlayerManager {
     _crossfadeTimer?.cancel();
   }
 
+  /// True while a fade or cross-fade ramp is in progress.
+  bool get _isFading =>
+      (_fadeTimer?.isActive ?? false) || (_crossfadeTimer?.isActive ?? false);
+
   /// Ramps a single player's volume to [target] over [duration].
   Future<void> _fade(AudioPlayer p, double target, Duration duration) async {
     _fadeTimer?.cancel();
@@ -280,7 +283,7 @@ class AudioPlayerManager {
   }
 
   void setVolumeSettings(double value) {
-    UserSettings.setPlayerVolume(type, _volume.value);
+    UserSettings.setPlayerVolume(type, value);
   }
 
   void switchIsMuted() {
@@ -293,8 +296,10 @@ class AudioPlayerManager {
       AudioSettings.instance.setFadeEnabled(!fadeEnabled.value);
 
   /// Re-applies the volume live when the master volume changes mid-playback.
+  /// Skipped while a fade is running so it does not fight the ramp (the fade
+  /// finishes at its captured target).
   void _onMasterChanged() {
-    if (isPlaying) _applyVolume(_active, _targetVolume);
+    if (isPlaying && !_isFading) _applyVolume(_active, _targetVolume);
   }
 
   AudioPlayer _acquireEffectPlayer() {
@@ -302,7 +307,11 @@ class AudioPlayerManager {
       if (!_busyEffects.contains(p)) return p;
     }
     if (_effectPool.length >= _maxEffectPlayers) {
+      // Pool full: recycle the oldest player. Stop whatever it was playing and
+      // clear its busy flag so its state is consistent before reuse.
       final p = _effectPool.removeAt(0);
+      p.stop();
+      _busyEffects.remove(p);
       _effectPool.add(p);
       return p;
     }
@@ -427,7 +436,13 @@ class AudioPlayerManager {
         if (useFade) await _fade(_active, _targetVolume, duration);
       }
     } catch (e) {
-      throw Exception('Error with the file: $e');
+      // Most callers (next/previous/auto-advance) do not await play(), so a
+      // throw here would become an unhandled async error. Recover gracefully:
+      // reset to a stopped state and log instead of crashing.
+      debugPrint('AudioPlayerManager.play failed for "${_path.value}": $e');
+      _cancelFades();
+      _changeState(PlayerState.stopped);
+      _position.value = Duration.zero;
     }
   }
 

@@ -56,9 +56,9 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
     builder:
         (context, mode, child) => IconButton(
           tooltip: switch (mode) {
-            LoopMode.none => 'Boucle : désactivée',
-            LoopMode.all => 'Boucle : playlist entière',
-            LoopMode.one => 'Boucle : morceau courant',
+            LoopMode.none => 'Loop: off',
+            LoopMode.all => 'Loop: whole playlist',
+            LoopMode.one => 'Loop: current track',
           },
           icon: Icon(
             mode == LoopMode.one
@@ -75,7 +75,7 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
     valueListenable: playlist.shuffle,
     builder:
         (context, on, child) => IconButton(
-          tooltip: 'Lecture aléatoire',
+          tooltip: 'Shuffle',
           icon: Icon(Icons.shuffle_rounded, size: 26),
           color: on ? Colors.green[400] : Colors.white60,
           onPressed: () => playlist.toggleShuffle(),
@@ -86,7 +86,7 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
     valueListenable: player.fadeEnabled,
     builder:
         (context, fade, child) => IconButton(
-          tooltip: 'Fondu enchaîné',
+          tooltip: 'Fade',
           icon: Icon(Icons.graphic_eq_rounded, size: 28),
           color: fade ? Colors.green[400] : Colors.white60,
           onPressed: () => player.toggleFade(),
@@ -242,7 +242,7 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
         );
       } else if (snapshot.hasError &&
           snapshot.connectionState == ConnectionState.done) {
-        return Text('Error occured');
+        return Text('An error occurred');
       } else {
         return LoadingScreen();
       }

@@ -8,12 +8,12 @@ class SettingsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final settings = AudioSettings.instance;
     return Scaffold(
-      appBar: AppBar(title: const Text('Réglages')),
+      appBar: AppBar(title: const Text('Settings')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           const Text(
-            'Volume maître',
+            'Master volume',
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
           ),
           ValueListenableBuilder<double>(
@@ -43,9 +43,9 @@ class SettingsScreen extends StatelessWidget {
             valueListenable: settings.fadeEnabled,
             builder:
                 (context, value, child) => SwitchListTile(
-                  title: const Text('Fondus (fade in/out)'),
+                  title: const Text('Fades (fade in/out)'),
                   subtitle: const Text(
-                    'Transitions en douceur à la lecture/pause',
+                    'Smooth transitions on play/pause',
                   ),
                   value: value,
                   onChanged: settings.setFadeEnabled,
@@ -57,7 +57,7 @@ class SettingsScreen extends StatelessWidget {
                 (context, value, child) => SwitchListTile(
                   title: const Text('Cross-fade'),
                   subtitle: const Text(
-                    'Recouvre les deux morceaux lors d\'un changement',
+                    'Overlaps both tracks on a track change',
                   ),
                   value: value,
                   onChanged: settings.setCrossfadeEnabled,
@@ -65,14 +65,14 @@ class SettingsScreen extends StatelessWidget {
           ),
           const Divider(),
           const Text(
-            'Durées de fondu',
+            'Fade durations',
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
           ),
           ValueListenableBuilder<int>(
             valueListenable: settings.shortFadeMs,
             builder:
                 (context, value, child) => _durationRow(
-                  label: 'Pause / lecture',
+                  label: 'Pause / play',
                   ms: value,
                   min: 0,
                   max: 3000,
@@ -84,7 +84,7 @@ class SettingsScreen extends StatelessWidget {
             valueListenable: settings.longFadeMs,
             builder:
                 (context, value, child) => _durationRow(
-                  label: 'Changement de morceau',
+                  label: 'Track change',
                   ms: value,
                   min: 0,
                   max: 8000,

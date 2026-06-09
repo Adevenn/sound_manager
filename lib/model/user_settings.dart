@@ -74,15 +74,4 @@ class UserSettings {
         _prefs.setString('effect_current_playlist', playlist.name);
     }
   }
-
-  /// Whether fade-in / fade-out transitions are enabled (global setting).
-  static Future<bool> getFadeEnabled() async {
-    _prefs = await SharedPreferences.getInstance();
-    return _prefs.getBool('fade_enabled') ?? true;
-  }
-
-  static Future<void> setFadeEnabled(bool enabled) async {
-    _prefs = await SharedPreferences.getInstance();
-    await _prefs.setBool('fade_enabled', enabled);
-  }
 }

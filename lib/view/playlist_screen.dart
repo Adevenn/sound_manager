@@ -18,11 +18,15 @@ class PlaylistScreen extends StatefulWidget {
 class _PlaylistScreenState extends State<PlaylistScreen> {
   AudioPlayerManager get player => widget.player;
   late Playlist playlist = widget.player.playlist;
-  late final ValueNotifier<Directory?> directory;
+  ValueNotifier<Directory?> directory = ValueNotifier(null);
+
+  // Created once: building the future inside build() would re-run it on every
+  // rebuild (and previously re-initialised a late-final field, which threw).
+  late final Future<void> _settingsFuture = _initSettings();
 
   Future<void> _initSettings() async {
     var path = await UserSettings.getPlayerSourceDirectory(player.type);
-    directory = ValueNotifier(path == null ? null : Directory(path));
+    directory.value = path == null ? null : Directory(path);
   }
 
   /// Prompts for a name then saves the working playlist to disk and remembers
@@ -33,22 +37,22 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
       context: context,
       builder:
           (context) => AlertDialog(
-            title: const Text('Sauvegarder la playlist'),
+            title: const Text('Save playlist'),
             content: TextField(
               controller: controller,
               autofocus: true,
-              decoration: const InputDecoration(labelText: 'Nom'),
+              decoration: const InputDecoration(labelText: 'Name'),
               onSubmitted: (value) => Navigator.of(context).pop(value.trim()),
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Annuler'),
+                child: const Text('Cancel'),
               ),
               FilledButton(
                 onPressed:
                     () => Navigator.of(context).pop(controller.text.trim()),
-                child: const Text('Sauvegarder'),
+                child: const Text('Save'),
               ),
             ],
           ),
@@ -60,7 +64,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
       setState(() {});
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Playlist "$name" sauvegardée')));
+      ).showSnackBar(SnackBar(content: Text('Playlist "$name" saved')));
     }
   }
 
@@ -71,7 +75,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
     if (!mounted) return;
     if (names.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Aucune playlist sauvegardée')),
+        const SnackBar(content: Text('No saved playlist')),
       );
       return;
     }
@@ -81,7 +85,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
           (context) => StatefulBuilder(
             builder:
                 (context, setDialogState) => AlertDialog(
-                  title: const Text('Charger une playlist'),
+                  title: const Text('Load a playlist'),
                   content: SizedBox(
                     width: 320,
                     child: ListView(
@@ -94,7 +98,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
                             onTap: () => Navigator.of(context).pop(name),
                             trailing: IconButton(
                               icon: const Icon(Icons.delete_outline_rounded),
-                              tooltip: 'Supprimer',
+                              tooltip: 'Delete',
                               onPressed: () async {
                                 await Playlist.delete(name);
                                 names.remove(name);
@@ -108,7 +112,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('Fermer'),
+                      child: const Text('Close'),
                     ),
                   ],
                 ),
@@ -130,16 +134,23 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
     }
   }
 
+  // Cache the directory scan so it does not hit the disk synchronously on every
+  // rebuild (the getter is read from build()). Recomputed only when the
+  // directory changes.
+  String? _cachedDirPath;
+  List<String> _cachedTrackPaths = [];
+
   List<String> _getTrackPaths() {
-    List<String> list = [];
-    if (directory.value != null) {
-      final files = directory.value!.listSync();
-      for (var f in files) {
-        if (p.extension(f.path) == '.mp3' || p.extension(f.path) == '.wav') {
-          list.add(f.path);
-        }
-      }
+    final dir = directory.value;
+    if (dir == null) return [];
+    if (dir.path == _cachedDirPath) return _cachedTrackPaths;
+    final list = <String>[];
+    for (var f in dir.listSync()) {
+      final ext = p.extension(f.path).toLowerCase();
+      if (ext == '.mp3' || ext == '.wav') list.add(f.path);
     }
+    _cachedDirPath = dir.path;
+    _cachedTrackPaths = list;
     return list;
   }
 
@@ -237,7 +248,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
                                     icon: const Icon(
                                       Icons.delete_outline_rounded,
                                     ),
-                                    tooltip: 'Retirer',
+                                    tooltip: 'Remove',
                                     onPressed:
                                         () => setState(
                                           () => playlist.removeTrack(index),
@@ -246,7 +257,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
                                 ),
                           )
                           : Center(
-                            child: Text('Glissez des fichiers ici'),
+                            child: Text('Drag files here'),
                           ),
             ),
       );
@@ -255,7 +266,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
 
   @override
   Widget build(BuildContext context) => FutureBuilder(
-    future: _initSettings(),
+    future: _settingsFuture,
     builder: (context, snapshot) {
       if (snapshot.connectionState == ConnectionState.done ||
           snapshot.hasData) {
@@ -281,7 +292,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
                         children: [
                           FloatingActionButton(
                             heroTag: null,
-                            tooltip: 'Charger une playlist',
+                            tooltip: 'Load a playlist',
                             onPressed: _loadPlaylistDialog,
                             child: Icon(Icons.library_music_rounded, size: 30),
                           ),
@@ -297,7 +308,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
                           ),
                           FloatingActionButton(
                             heroTag: null,
-                            tooltip: 'Sauvegarder la playlist',
+                            tooltip: 'Save playlist',
                             onPressed: _savePlaylistDialog,
                             child: Icon(Icons.save_rounded, size: 30),
                           ),
@@ -358,7 +369,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
         );
       } else if (snapshot.connectionState == ConnectionState.done &&
           snapshot.hasError) {
-        return Center(child: Text('Error occured'));
+        return Center(child: Text('An error occurred'));
       }
       return LoadingScreen();
     },
