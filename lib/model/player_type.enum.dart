@@ -8,7 +8,7 @@ enum PlayerType {
       'ambiance' => ambiance,
       'music' => music,
       'effect' => effect,
-      _ => throw Exception,
+      _ => throw ArgumentError('Unknown player type: $name'),
     };
   }
 }

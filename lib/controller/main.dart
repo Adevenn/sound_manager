@@ -101,22 +101,22 @@ class _SoundManagerScreenState extends State<SoundManagerScreen> {
       context: context,
       builder:
           (context) => AlertDialog(
-            title: const Text('Enregistrer la scène'),
+            title: const Text('Save scene'),
             content: TextField(
               controller: controller,
               autofocus: true,
-              decoration: const InputDecoration(labelText: 'Nom de la scène'),
+              decoration: const InputDecoration(labelText: 'Scene name'),
               onSubmitted: (v) => Navigator.of(context).pop(v.trim()),
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Annuler'),
+                child: const Text('Cancel'),
               ),
               FilledButton(
                 onPressed:
                     () => Navigator.of(context).pop(controller.text.trim()),
-                child: const Text('Enregistrer'),
+                child: const Text('Save'),
               ),
             ],
           ),
@@ -125,7 +125,7 @@ class _SoundManagerScreenState extends State<SoundManagerScreen> {
       await _saveCurrentAsScene(name);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Scène "$name" enregistrée')),
+          SnackBar(content: Text('Scene "$name" saved')),
         );
       }
     }
@@ -140,12 +140,12 @@ class _SoundManagerScreenState extends State<SoundManagerScreen> {
           (context) => StatefulBuilder(
             builder:
                 (context, setDialog) => AlertDialog(
-                  title: const Text('Scènes'),
+                  title: const Text('Scenes'),
                   content: SizedBox(
                     width: 360,
                     child:
                         scenes.isEmpty
-                            ? const Text('Aucune scène enregistrée')
+                            ? const Text('No saved scene')
                             : ListView(
                               shrinkWrap: true,
                               children: [
@@ -177,11 +177,11 @@ class _SoundManagerScreenState extends State<SoundManagerScreen> {
                         Navigator.of(context).pop();
                         _promptSaveScene();
                       },
-                      child: const Text('Enregistrer la scène actuelle'),
+                      child: const Text('Save current scene'),
                     ),
                     TextButton(
                       onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('Fermer'),
+                      child: const Text('Close'),
                     ),
                   ],
                 ),
@@ -235,17 +235,17 @@ class _SoundManagerScreenState extends State<SoundManagerScreen> {
                     ? Icons.pause_circle_outline_rounded
                     : Icons.play_circle_outline_rounded,
               ),
-              label: Text(playing ? 'Pause générale' : 'Lecture générale'),
+              label: Text(playing ? 'Pause all' : 'Play all'),
             );
           },
         ),
         IconButton(
-          tooltip: 'Scènes',
+          tooltip: 'Scenes',
           icon: const Icon(Icons.movie_rounded),
           onPressed: _openScenesDialog,
         ),
         IconButton(
-          tooltip: 'Réglages',
+          tooltip: 'Settings',
           icon: const Icon(Icons.settings_rounded),
           onPressed:
               () => Navigator.of(context).push(

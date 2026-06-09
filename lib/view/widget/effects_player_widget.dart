@@ -109,16 +109,16 @@ class _AudioPlayerWidgetState extends State<EffectsPlayerWidget> {
                         ),
                         SwitchListTile(
                           contentPadding: EdgeInsets.zero,
-                          title: const Text('Maintenir = boucle'),
+                          title: const Text('Hold = loop'),
                           subtitle: const Text(
-                            'Joue en boucle tant que le bouton est maintenu',
+                            'Loops while the button is held down',
                           ),
                           value: track.loop,
                           onChanged:
                               (v) => setDialog(() => track.loop = v),
                         ),
                         const SizedBox(height: 8),
-                        const Text('Couleur'),
+                        const Text('Color'),
                         Wrap(
                           spacing: 8,
                           children: [
@@ -146,7 +146,7 @@ class _AudioPlayerWidgetState extends State<EffectsPlayerWidget> {
                           ],
                         ),
                         const SizedBox(height: 8),
-                        const Text('Icône'),
+                        const Text('Icon'),
                         Wrap(
                           children: [
                             for (int i = 0; i < EffectStyle.icons.length; i++)
@@ -167,7 +167,7 @@ class _AudioPlayerWidgetState extends State<EffectsPlayerWidget> {
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('Fermer'),
+                      child: const Text('Close'),
                     ),
                   ],
                 ),
@@ -238,7 +238,7 @@ class _AudioPlayerWidgetState extends State<EffectsPlayerWidget> {
           );
         } else if (snapshot.hasError &&
             snapshot.connectionState == ConnectionState.done) {
-          return Text('Error occured');
+          return Text('An error occurred');
         } else {
           return LoadingScreen();
         }
