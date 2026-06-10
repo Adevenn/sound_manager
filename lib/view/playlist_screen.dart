@@ -204,44 +204,72 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
     if (mounted) setState(() => _trackPaths = paths);
   }
 
-  /// Prompts for a streaming URL and appends it as a url soundtrack.
+  /// Prompts for a streaming URL and appends it as a url soundtrack. Known
+  /// page-only links (Spotify, YouTube…) are rejected with an explanation.
   Future<void> _addUrlDialog() async {
     final urlController = TextEditingController();
     final nameController = TextEditingController();
+    String? error;
     final ok = await showDialog<bool>(
       context: context,
       builder:
-          (context) => AlertDialog(
-            title: const Text('Add a URL stream'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: urlController,
-                  autofocus: true,
-                  decoration: const InputDecoration(
-                    labelText: 'URL',
-                    hintText: 'https://example.com/stream.mp3',
+          (context) => StatefulBuilder(
+            builder:
+                (context, setDialog) => AlertDialog(
+                  title: const Text('Add a URL stream'),
+                  content: SizedBox(
+                    width: 420,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        TextField(
+                          controller: urlController,
+                          autofocus: true,
+                          decoration: const InputDecoration(
+                            labelText: 'URL',
+                            hintText: 'https://example.com/stream.mp3',
+                          ),
+                        ),
+                        TextField(
+                          controller: nameController,
+                          decoration: const InputDecoration(
+                            labelText: 'Display name (optional)',
+                          ),
+                        ),
+                        if (error != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 12),
+                            child: Text(
+                              error!,
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.error,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(false),
+                      child: const Text('Cancel'),
+                    ),
+                    FilledButton(
+                      onPressed: () {
+                        final problem = urlStreamProblem(
+                          urlController.text.trim(),
+                        );
+                        if (problem != null) {
+                          setDialog(() => error = problem);
+                          return;
+                        }
+                        Navigator.of(context).pop(true);
+                      },
+                      child: const Text('Add'),
+                    ),
+                  ],
                 ),
-                TextField(
-                  controller: nameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Display name (optional)',
-                  ),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                child: const Text('Add'),
-              ),
-            ],
           ),
     );
     final url = urlController.text.trim();

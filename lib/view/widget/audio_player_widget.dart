@@ -24,6 +24,26 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
 
   late final Future<void> _settingsFuture = player.loadSettings();
 
+  @override
+  void initState() {
+    super.initState();
+    player.lastError.addListener(_onPlayerError);
+  }
+
+  @override
+  void dispose() {
+    player.lastError.removeListener(_onPlayerError);
+    super.dispose();
+  }
+
+  /// Surfaces playback failures (missing file, unplayable URL…) so they are
+  /// never silent.
+  void _onPlayerError() {
+    final msg = player.lastError.value;
+    if (msg == null || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
   Widget get _previousTrack => IconButton(
     icon: Icon(Icons.skip_previous_rounded, size: 35),
     onPressed: playlist.isPreviousTrack ? () => player.previousTrack() : null,

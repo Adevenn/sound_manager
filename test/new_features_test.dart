@@ -79,4 +79,40 @@ void main() {
       expect(Soundtrack.fromJson(t.toJson()).generative, isTrue);
     });
   });
+
+  group('URL stream validation', () {
+    test('accepts direct audio URLs', () {
+      expect(urlStreamProblem('https://example.com/stream.mp3'), isNull);
+      expect(urlStreamProblem('http://radio.example.org:8000/live'), isNull);
+    });
+
+    test('rejects streaming-platform page links (Spotify, YouTube…)', () {
+      expect(
+        urlStreamProblem(
+          'https://open.spotify.com/intl-fr/track/5RCUcFJcJTeCswnKIGH22l',
+        ),
+        contains('open.spotify.com'),
+      );
+      expect(
+        urlStreamProblem('https://www.youtube.com/watch?v=abc'),
+        isNotNull,
+      );
+      expect(urlStreamProblem('https://youtu.be/abc'), isNotNull);
+      expect(
+        urlStreamProblem('https://soundcloud.com/artist/track'),
+        isNotNull,
+      );
+    });
+
+    test('rejects malformed or non-http input', () {
+      expect(urlStreamProblem('not a url'), isNotNull);
+      expect(urlStreamProblem('ftp://host/file.mp3'), isNotNull);
+      expect(urlStreamProblem(''), isNotNull);
+    });
+
+    test('does not flag hosts that merely contain a platform name', () {
+      expect(urlStreamProblem('https://notspotify.com/a.mp3'), isNull);
+      expect(urlStreamProblem('https://myyoutu.be.example.com/a.mp3'), isNull);
+    });
+  });
 }

@@ -83,6 +83,27 @@ class AudioPlayerManager {
   /// Recomputed whenever the playlist changes; the UI greys those tracks out.
   final ValueNotifier<Set<String>> missingTrackIds = ValueNotifier({});
 
+  /// Human-readable description of the last playback failure (missing file,
+  /// unplayable URL…). The channel widget listens and surfaces it as a
+  /// snackbar, so failures are never silent.
+  final ValueNotifier<String?> lastError = ValueNotifier(null);
+
+  /// Publishes [message] on [lastError], forcing a notification even when the
+  /// same error happens twice in a row.
+  void _reportError(String message) {
+    lastError.value = null;
+    lastError.value = message;
+  }
+
+  /// Error message for a track that failed to start, adapted to its type.
+  String _playFailureMessage(Soundtrack? track) =>
+      track?.type == SoundtrackType.url
+          ? 'Cannot stream "${track?.name}". Links to streaming platforms '
+              '(Spotify, YouTube…) are web pages — only direct audio URLs '
+              '(.mp3 file, web radio…) can be played.'
+          : 'Cannot play "${track?.name ?? _path.value}" — the file may be '
+              'missing or unreadable.';
+
   late Playlist _playlist;
   Playlist get playlist => _playlist;
   set playlist(Playlist value) {
@@ -292,6 +313,7 @@ class AudioPlayerManager {
     } catch (e) {
       debugPrint('startFadedIn failed for "${_path.value}": $e');
       _changeState(PlayerState.stopped);
+      _reportError(_playFailureMessage(playlist.actualSoundtrack));
     }
   }
 
@@ -513,6 +535,8 @@ class AudioPlayerManager {
       // become an unhandled async error.
       debugPrint('playEffect failed for "${track.source}": $e');
       _busyEffects.remove(player);
+      _refreshDuck();
+      _reportError(_playFailureMessage(track));
     }
   }
 
@@ -531,6 +555,8 @@ class AudioPlayerManager {
       debugPrint('startLoopEffect failed for "${track.source}": $e');
       _busyEffects.remove(player);
       _heldLoops.remove(player);
+      _refreshDuck();
+      _reportError(_playFailureMessage(track));
     }
     return player;
   }
@@ -582,6 +608,7 @@ class AudioPlayerManager {
     _path.dispose();
     playlistRevision.dispose();
     missingTrackIds.dispose();
+    lastError.dispose();
   }
 
   Future<void> pause({bool fade = true}) async {
@@ -659,11 +686,12 @@ class AudioPlayerManager {
     } catch (e) {
       // Most callers (next/previous/auto-advance) do not await play(), so a
       // throw here would become an unhandled async error. Recover gracefully:
-      // reset to a stopped state and log instead of crashing.
+      // reset to a stopped state and tell the user instead of crashing.
       debugPrint('AudioPlayerManager.play failed for "${_path.value}": $e');
       _cancelFades();
       _changeState(PlayerState.stopped);
       _position.value = Duration.zero;
+      _reportError(_playFailureMessage(playlist.actualSoundtrack));
     }
   }
 

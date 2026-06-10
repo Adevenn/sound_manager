@@ -34,12 +34,26 @@ class _AudioPlayerWidgetState extends State<EffectsPlayerWidget> {
   int _page = 0;
 
   @override
+  void initState() {
+    super.initState();
+    player.lastError.addListener(_onPlayerError);
+  }
+
+  @override
   void dispose() {
+    player.lastError.removeListener(_onPlayerError);
     for (final p in _held.values) {
       player.stopLoopEffect(p);
     }
     _held.clear();
     super.dispose();
+  }
+
+  /// Surfaces effect playback failures (missing file, unplayable URL…).
+  void _onPlayerError() {
+    final msg = player.lastError.value;
+    if (msg == null || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   Future<void> _startLoop(Soundtrack track) async {

@@ -25,7 +25,8 @@ and **Effects** — and drive a whole game session's soundscape from one window.
 - **Press-and-hold loop effects** — flag an effect as *Hold = loop* (rain,
   wind…) and it loops for exactly as long as the pad is held.
 - **URL streaming** — playlists can mix local files and `http(s)` audio
-  streams.
+  streams (direct audio URLs: an `.mp3`/`.ogg` file or a web-radio stream —
+  *page* links from Spotify/YouTube/etc. are not audio and cannot be played).
 
 ### Scenes
 Save the entire desk state (the three playlists + volumes) as a named **scene**
