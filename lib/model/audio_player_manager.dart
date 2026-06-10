@@ -339,13 +339,17 @@ class AudioPlayerManager {
     DuckController.instance.setEffectsActive(_busyEffects.isNotEmpty);
   }
 
-  /// Ramps the live volume toward the new ducked/un-ducked target. Skipped
-  /// while a fade is running so it doesn't fight a track-change ramp.
+  /// Ramps the live volume toward the new ducked/un-ducked target.
+  ///
+  /// Restarts the ramp on every change (so a duck-down still in flight is
+  /// correctly reversed when the effect ends — skipping here would leave the
+  /// channel stuck at the ducked level). Only an active *cross-fade* is left
+  /// alone: it is brief and interrupting it would cut the outgoing track.
   void _onDuckChanged() {
     if (_type == PlayerType.effect) return;
-    if (isPlaying && !_isFading) {
-      _fade(_active, _targetVolume, const Duration(milliseconds: 350));
-    }
+    if (!isPlaying) return;
+    if (_crossfadeTimer?.isActive ?? false) return;
+    _fade(_active, _targetVolume, const Duration(milliseconds: 350));
   }
 
   double _volOf(AudioPlayer p) => identical(p, _playerA) ? _volA : _volB;

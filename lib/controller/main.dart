@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -126,10 +127,19 @@ class _SoundManagerScreenState extends State<SoundManagerScreen>
 
   // -- Window bounds --------------------------------------------------------
 
+  /// Move/resize events fire continuously while dragging the window: debounce
+  /// so prefs are written once the window settles, not on every pixel.
+  Timer? _boundsDebounce;
+
   @override
-  void onWindowResized() => _saveBounds();
+  void onWindowResized() => _scheduleSaveBounds();
   @override
-  void onWindowMoved() => _saveBounds();
+  void onWindowMoved() => _scheduleSaveBounds();
+
+  void _scheduleSaveBounds() {
+    _boundsDebounce?.cancel();
+    _boundsDebounce = Timer(const Duration(milliseconds: 250), _saveBounds);
+  }
 
   Future<void> _saveBounds() async {
     try {
@@ -147,12 +157,32 @@ class _SoundManagerScreenState extends State<SoundManagerScreen>
   // -- Campaigns ------------------------------------------------------------
 
   Future<void> _switchCampaign(String name) async {
-    if (name == CampaignManager.instance.current.value) return;
+    final cm = CampaignManager.instance;
+    if (CampaignManager.sanitize(name) == cm.current.value) return;
     _generative.stop();
+    await effectPlayer.stopEffects();
     await Future.wait(_managers.map((m) => m.stop(fade: false)));
-    _disposeManagers();
-    await CampaignManager.instance.setCurrent(name);
-    if (mounted) setState(_buildManagers);
+    final oldManagers = _managers;
+    final oldGenerative = _generative;
+    // Async part first, while the UI still points at the old (live) managers.
+    await cm.ensureExists(name);
+    if (!mounted) return;
+    // Swap the campaign notifier and the managers in one synchronous span:
+    // the body is keyed on the campaign name, so no frame can ever build the
+    // channel widgets against disposed managers.
+    setState(() {
+      cm.setCurrentSync(name);
+      _buildManagers();
+    });
+    // The keyed rebuild unmounts the old subtree this frame; release the old
+    // managers only after that, so unmounting widgets never touch a disposed
+    // notifier.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      oldGenerative.dispose();
+      for (final m in oldManagers) {
+        m.dispose();
+      }
+    });
   }
 
   Future<void> _openCampaignsDialog() async {
@@ -218,6 +248,19 @@ class _SoundManagerScreenState extends State<SoundManagerScreen>
                                             size: 20,
                                           ),
                                           onPressed: () async {
+                                            // Deleting the campaign in use:
+                                            // move to Default first so the
+                                            // channels reload cleanly instead
+                                            // of keeping the deleted data.
+                                            if (name ==
+                                                CampaignManager
+                                                    .instance
+                                                    .current
+                                                    .value) {
+                                              await _switchCampaign(
+                                                CampaignManager.defaultCampaign,
+                                              );
+                                            }
                                             await CampaignManager.instance
                                                 .delete(name);
                                             names =
@@ -311,9 +354,23 @@ class _SoundManagerScreenState extends State<SoundManagerScreen>
     );
   }
 
+  /// True while a scene transition is in progress, so a second click can't
+  /// interleave two transitions over the same players.
+  bool _applyingScene = false;
+
   /// Applies a scene, cross-fading the whole soundscape (all three channels at
   /// once) when fades are enabled, or cutting instantly otherwise.
   Future<void> _applyScene(Scene scene) async {
+    if (_applyingScene) return;
+    _applyingScene = true;
+    try {
+      await _applySceneInner(scene);
+    } finally {
+      _applyingScene = false;
+    }
+  }
+
+  Future<void> _applySceneInner(Scene scene) async {
     final settings = AudioSettings.instance;
     final useFade =
         settings.fadeEnabled.value && settings.sceneFadeMs.value > 0;
@@ -460,6 +517,7 @@ class _SoundManagerScreenState extends State<SoundManagerScreen>
 
   @override
   void dispose() {
+    _boundsDebounce?.cancel();
     if (_isDesktop) windowManager.removeListener(this);
     _disposeManagers();
     super.dispose();
@@ -537,7 +595,20 @@ class _SoundManagerScreenState extends State<SoundManagerScreen>
                   on ? Icons.casino_rounded : Icons.casino_outlined,
                   color: on ? PlayerType.effect.style.color : null,
                 ),
-                onPressed: _generative.toggle,
+                onPressed: () {
+                  if (!on && _generative.eligibleCount == 0) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'No effect is flagged "Generative" yet — right-click '
+                          'an effect pad and enable "Generative" first.',
+                        ),
+                      ),
+                    );
+                    return;
+                  }
+                  _generative.toggle();
+                },
               ),
         ),
         IconButton(

@@ -452,13 +452,31 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
                                                   : (playing ? _accent : null),
                                         ),
                                       ),
-                                      title: Text(
-                                        p.basename(track.source),
-                                        overflow: TextOverflow.ellipsis,
-                                        style:
-                                            missing
-                                                ? TextStyle(color: errorColor)
-                                                : null,
+                                      title: Row(
+                                        children: [
+                                          if (track.type == SoundtrackType.url)
+                                            const Padding(
+                                              padding: EdgeInsets.only(
+                                                right: 6,
+                                              ),
+                                              child: Icon(
+                                                Icons.link_rounded,
+                                                size: 16,
+                                              ),
+                                            ),
+                                          Expanded(
+                                            child: Text(
+                                              track.name,
+                                              overflow: TextOverflow.ellipsis,
+                                              style:
+                                                  missing
+                                                      ? TextStyle(
+                                                        color: errorColor,
+                                                      )
+                                                      : null,
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                       subtitle:
                                           missing

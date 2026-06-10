@@ -309,7 +309,9 @@ class _AudioPlayerWidgetState extends State<EffectsPlayerWidget> {
               crossAxisCount: columns,
               mainAxisSpacing: 8,
               crossAxisSpacing: 8,
-              childAspectRatio: 1.15,
+              // Wide, flat pads keep the two-row board compact so the channel
+              // panels above keep most of the vertical space (min height 600).
+              childAspectRatio: 1.5,
               children: [
                 for (final track in pageTracks)
                   EffectChip(

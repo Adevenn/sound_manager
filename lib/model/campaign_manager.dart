@@ -33,14 +33,30 @@ class CampaignManager {
   static String sanitize(String name) =>
       name.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_').trim();
 
-  /// Switches the active campaign (creating its folder if needed). Callers must
-  /// rebuild/reload channel state afterwards.
-  Future<void> setCurrent(String name) async {
+  /// Creates the campaign's folder if needed (the async part of a switch,
+  /// safe to run while the UI still shows the previous campaign).
+  Future<void> ensureExists(String name) async {
     final clean = sanitize(name);
     if (clean.isEmpty) return;
     await (await AppDirectories.campaign(clean)).create(recursive: true);
+  }
+
+  /// Synchronous part of a switch: updates [current] (notifying listeners) and
+  /// kicks off the pref write. Callers that rebuild UI state keyed on the
+  /// campaign must do so in the **same synchronous span** as this call, so no
+  /// frame can ever build against stale/disposed state.
+  void setCurrentSync(String name) {
+    final clean = sanitize(name);
+    if (clean.isEmpty) return;
     current.value = clean;
-    await Prefs.instance.setString(_kCurrent, clean);
+    Prefs.instance.setString(_kCurrent, clean);
+  }
+
+  /// Switches the active campaign (creating its folder if needed). Callers must
+  /// rebuild/reload channel state afterwards.
+  Future<void> setCurrent(String name) async {
+    await ensureExists(name);
+    setCurrentSync(name);
   }
 
   /// Every campaign on disk, sorted, always including [defaultCampaign].
@@ -77,8 +93,32 @@ class CampaignManager {
     final to = await AppDirectories.campaign(clean);
     if (await from.exists() && !await to.exists()) {
       await from.rename(to.path);
+      await _migratePrefKeys(oldName, clean);
     }
     if (current.value == oldName) await setCurrent(clean);
+  }
+
+  /// Moves the campaign-scoped preference keys (`camp_<old>_*`) to the new
+  /// campaign prefix so per-channel volumes/playlists survive a rename.
+  Future<void> _migratePrefKeys(String oldName, String newName) async {
+    final p = Prefs.instance;
+    final oldPrefix = 'camp_${oldName}_';
+    final newPrefix = 'camp_${newName}_';
+    for (final key
+        in p.getKeys().where((k) => k.startsWith(oldPrefix)).toList()) {
+      final newKey = key.replaceFirst(oldPrefix, newPrefix);
+      final v = p.get(key);
+      if (v is String) {
+        await p.setString(newKey, v);
+      } else if (v is double) {
+        await p.setDouble(newKey, v);
+      } else if (v is int) {
+        await p.setInt(newKey, v);
+      } else if (v is bool) {
+        await p.setBool(newKey, v);
+      }
+      await p.remove(key);
+    }
   }
 
   /// One-time migration of pre-campaign data (`<Data>/Playlist`, `scenes.json`

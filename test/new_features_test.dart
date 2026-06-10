@@ -37,6 +37,15 @@ void main() {
       await Prefs.init();
       expect(UserSettings.getPlayerVolume(PlayerType.ambiance), 0.33);
     });
+
+    test('campaign names are sanitized for the filesystem', () {
+      expect(CampaignManager.sanitize('My: "Game"?'), 'My_ _Game__');
+      expect(
+        CampaignManager.sanitize('  Curse of Strahd  '),
+        'Curse of Strahd',
+      );
+      expect(CampaignManager.sanitize('a/b\\c'), 'a_b_c');
+    });
   });
 
   group('Soundtrack URL support', () {

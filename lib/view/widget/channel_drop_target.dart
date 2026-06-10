@@ -26,17 +26,26 @@ class ChannelDropTarget extends StatefulWidget {
 class _ChannelDropTargetState extends State<ChannelDropTarget> {
   bool _hovering = false;
 
+  /// desktop_drop dispatches by screen region, so a drop aimed at a dialog
+  /// (e.g. the fullscreen playlist editor) would also land on the channel
+  /// hidden underneath. Only react while this route is on top.
+  bool get _routeIsCurrent => ModalRoute.of(context)?.isCurrent ?? true;
+
   @override
   Widget build(BuildContext context) {
     return DropTarget(
-      onDragEntered: (_) => setState(() => _hovering = true),
+      onDragEntered: (_) {
+        if (_routeIsCurrent) setState(() => _hovering = true);
+      },
       onDragExited: (_) => setState(() => _hovering = false),
       onDragDone: (details) {
+        final accept = _routeIsCurrent;
+        setState(() => _hovering = false);
+        if (!accept) return;
         final paths = details.files
             .map((f) => f.path)
             .where(isAudioFile)
             .toList(growable: false);
-        setState(() => _hovering = false);
         if (paths.isNotEmpty) widget.onFiles(paths);
       },
       child: Stack(
