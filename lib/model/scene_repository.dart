@@ -38,14 +38,53 @@ class SceneManager {
 
   /// Adds [scene], replacing any existing scene with the same name.
   static Future<void> add(Scene scene) async {
-    final scenes = await list()
-      ..removeWhere((s) => s.name == scene.name)
-      ..add(scene);
+    final scenes =
+        await list()
+          ..removeWhere((s) => s.name == scene.name)
+          ..add(scene);
     await _saveAll(scenes);
   }
 
   static Future<void> delete(String name) async {
-    final scenes = await list()..removeWhere((s) => s.name == name);
+    final scenes =
+        await list()
+          ..removeWhere((s) => s.name == name);
+    await _saveAll(scenes);
+  }
+
+  /// Renames scene [oldName] to [newName] (no-op if the new name is empty or
+  /// already taken).
+  static Future<void> rename(String oldName, String newName) async {
+    final clean = newName.trim();
+    if (clean.isEmpty) return;
+    final scenes = await list();
+    if (scenes.any((s) => s.name == clean)) return;
+    final index = scenes.indexWhere((s) => s.name == oldName);
+    if (index == -1) return;
+    scenes[index].name = clean;
+    await _saveAll(scenes);
+  }
+
+  /// Duplicates scene [name] under `<name> (copy)` (uniquified).
+  static Future<void> duplicate(String name) async {
+    final scenes = await list();
+    final index = scenes.indexWhere((s) => s.name == name);
+    if (index == -1) return;
+    final scene = scenes[index];
+    final existing = scenes.map((s) => s.name).toSet();
+    var copy = '$name (copy)';
+    var n = 2;
+    while (existing.contains(copy)) {
+      copy = '$name (copy $n)';
+      n++;
+    }
+    scenes.add(
+      Scene(
+        name: copy,
+        playlists: Map.of(scene.playlists),
+        volumes: Map.of(scene.volumes),
+      ),
+    );
     await _saveAll(scenes);
   }
 }

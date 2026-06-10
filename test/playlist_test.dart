@@ -59,13 +59,16 @@ void main() {
       expect(pl.actualSoundtrack, isNull);
     });
 
-    test('reorderTrack moves the last track to the front, keeping selection', () {
-      final pl = _playlistOf(3); // track_0 selected
-      final selected = pl.actualSoundtrack;
-      pl.reorderTrack(2, 0);
-      expect(pl.actualSoundtrack, same(selected));
-      expect(pl.trackIndex.value, 1);
-    });
+    test(
+      'reorderTrack moves the last track to the front, keeping selection',
+      () {
+        final pl = _playlistOf(3); // track_0 selected
+        final selected = pl.actualSoundtrack;
+        pl.reorderTrack(2, 0);
+        expect(pl.actualSoundtrack, same(selected));
+        expect(pl.trackIndex.value, 1);
+      },
+    );
 
     test('reorderTrack moves an item down (post-removal index convention)', () {
       final pl = _playlistOf(3); // [t0, t1, t2], t0 selected

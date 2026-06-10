@@ -63,6 +63,7 @@ class Playlist {
     _trackIndex.value = _shuffleBag.removeLast();
     return true;
   }
+
   bool get isNotEmpty => _tracks.isNotEmpty;
   bool get isEmpty => _tracks.isEmpty;
   bool get isPreviousTrack => _trackIndex.value > 0;
@@ -78,7 +79,8 @@ class Playlist {
 
   /// Rebuilds a playlist from its JSON map (as written by [toJson]). Pure: file
   /// reading lives in `PlaylistRepository`.
-  Playlist.fromJson(Map<String, dynamic> json) : _name = json['name'] as String {
+  Playlist.fromJson(Map<String, dynamic> json)
+    : _name = json['name'] as String {
     id = json['id'] as String;
     for (final sound in (json['sounds'] as List)) {
       _tracks.add(Soundtrack.fromJson(sound));

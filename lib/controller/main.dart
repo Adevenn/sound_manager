@@ -8,25 +8,41 @@ import 'package:sound_manager/view/widget/audio_player_widget.dart';
 import 'package:sound_manager/view/widget/effects_player_widget.dart';
 import 'package:window_manager/window_manager.dart';
 
+bool get _isDesktop =>
+    Platform.isWindows || Platform.isLinux || Platform.isMacOS;
+
+const _kWinX = 'win_x', _kWinY = 'win_y', _kWinW = 'win_w', _kWinH = 'win_h';
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // Load the shared preferences once so all settings classes can read/write
   // synchronously afterwards.
   await Prefs.init();
+  CampaignManager.instance.load();
+  // Move any pre-campaign data into the Default campaign (one-time, safe).
+  await CampaignManager.instance.migrateLegacyData();
   AudioSettings.instance.load();
   ShortcutSettings.instance.load();
-  if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+  if (_isDesktop) {
     await windowManager.ensureInitialized();
-    const windowOptions = WindowOptions(
+    final prefs = Prefs.instance;
+    final w = prefs.getDouble(_kWinW), h = prefs.getDouble(_kWinH);
+    final x = prefs.getDouble(_kWinX), y = prefs.getDouble(_kWinY);
+    final windowOptions = WindowOptions(
       title: 'Sound Manager',
-      minimumSize: Size(800, 600),
+      minimumSize: const Size(800, 600),
+      size: (w != null && h != null) ? Size(w, h) : null,
     );
     await windowManager.waitUntilReadyToShow(windowOptions, () async {
+      // Restore the last position/size when we have a full saved rect.
+      if (x != null && y != null && w != null && h != null) {
+        await windowManager.setBounds(Rect.fromLTWH(x, y, w, h));
+      }
       await windowManager.show();
       await windowManager.focus();
     });
   }
-  runApp(SoundManagerApp());
+  runApp(const SoundManagerApp());
 }
 
 class SoundManagerApp extends StatelessWidget {
@@ -36,7 +52,7 @@ class SoundManagerApp extends StatelessWidget {
   Widget build(BuildContext context) => MaterialApp(
     theme: AppTheme.dark(),
     debugShowCheckedModeBanner: false,
-    home: SoundManagerScreen(),
+    home: const SoundManagerScreen(),
   );
 }
 
@@ -44,19 +60,38 @@ class SoundManagerScreen extends StatefulWidget {
   const SoundManagerScreen({super.key});
 
   @override
-  _SoundManagerScreenState createState() => _SoundManagerScreenState();
+  State<SoundManagerScreen> createState() => _SoundManagerScreenState();
 }
 
-class _SoundManagerScreenState extends State<SoundManagerScreen> {
-  final ambiancePlayer = AudioPlayerManager(PlayerType.ambiance);
-  final musicPlayer = AudioPlayerManager(PlayerType.music);
-  final effectPlayer = AudioPlayerManager(PlayerType.effect);
+class _SoundManagerScreenState extends State<SoundManagerScreen>
+    with WindowListener {
+  late AudioPlayerManager ambiancePlayer;
+  late AudioPlayerManager musicPlayer;
+  late AudioPlayerManager effectPlayer;
+  late List<AudioPlayerManager> _managers;
+  late GenerativeTrigger _generative;
 
-  late final List<AudioPlayerManager> _managers = [
-    ambiancePlayer,
-    musicPlayer,
-    effectPlayer,
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _buildManagers();
+    if (_isDesktop) windowManager.addListener(this);
+  }
+
+  void _buildManagers() {
+    ambiancePlayer = AudioPlayerManager(PlayerType.ambiance);
+    musicPlayer = AudioPlayerManager(PlayerType.music);
+    effectPlayer = AudioPlayerManager(PlayerType.effect);
+    _managers = [ambiancePlayer, musicPlayer, effectPlayer];
+    _generative = GenerativeTrigger(effectPlayer);
+  }
+
+  void _disposeManagers() {
+    _generative.dispose();
+    for (final m in _managers) {
+      m.dispose();
+    }
+  }
 
   bool get _isAnyPlaying => ambiancePlayer.isPlaying || musicPlayer.isPlaying;
 
@@ -72,11 +107,191 @@ class _SoundManagerScreenState extends State<SoundManagerScreen> {
     }
   }
 
+  void _toggleChannelPause(AudioPlayerManager m) {
+    if (m.isPlaying) {
+      m.pause();
+    } else if (m.isPause) {
+      m.resume();
+    } else {
+      m.play(short: true);
+    }
+  }
+
   /// Triggers the [index]-th effect (bound to keyboard digits 1-9).
   void _triggerEffect(int index) {
     if (index < effectPlayer.tracks.length) {
       effectPlayer.playEffect(effectPlayer.tracks[index]);
     }
+  }
+
+  // -- Window bounds --------------------------------------------------------
+
+  @override
+  void onWindowResized() => _saveBounds();
+  @override
+  void onWindowMoved() => _saveBounds();
+
+  Future<void> _saveBounds() async {
+    try {
+      final b = await windowManager.getBounds();
+      final p = Prefs.instance;
+      await p.setDouble(_kWinX, b.left);
+      await p.setDouble(_kWinY, b.top);
+      await p.setDouble(_kWinW, b.width);
+      await p.setDouble(_kWinH, b.height);
+    } catch (_) {
+      // Window not ready / headless: ignore.
+    }
+  }
+
+  // -- Campaigns ------------------------------------------------------------
+
+  Future<void> _switchCampaign(String name) async {
+    if (name == CampaignManager.instance.current.value) return;
+    _generative.stop();
+    await Future.wait(_managers.map((m) => m.stop(fade: false)));
+    _disposeManagers();
+    await CampaignManager.instance.setCurrent(name);
+    if (mounted) setState(_buildManagers);
+  }
+
+  Future<void> _openCampaignsDialog() async {
+    var names = await CampaignManager.instance.list();
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder:
+          (context) => StatefulBuilder(
+            builder:
+                (context, setDialog) => AlertDialog(
+                  title: const Text('Campaigns'),
+                  content: SizedBox(
+                    width: 360,
+                    child: ListView(
+                      shrinkWrap: true,
+                      children: [
+                        for (final name in names)
+                          ListTile(
+                            leading: Icon(
+                              name == CampaignManager.instance.current.value
+                                  ? Icons.folder_open_rounded
+                                  : Icons.folder_rounded,
+                            ),
+                            title: Text(name),
+                            selected:
+                                name == CampaignManager.instance.current.value,
+                            onTap: () {
+                              Navigator.of(context).pop();
+                              _switchCampaign(name);
+                            },
+                            trailing:
+                                name == CampaignManager.defaultCampaign
+                                    ? null
+                                    : Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        IconButton(
+                                          tooltip: 'Rename',
+                                          icon: const Icon(
+                                            Icons.edit_outlined,
+                                            size: 20,
+                                          ),
+                                          onPressed: () async {
+                                            final newName = await _promptText(
+                                              title: 'Rename campaign',
+                                              initial: name,
+                                            );
+                                            if (newName == null) return;
+                                            await CampaignManager.instance
+                                                .rename(name, newName);
+                                            names =
+                                                await CampaignManager.instance
+                                                    .list();
+                                            setDialog(() {});
+                                            if (mounted) setState(() {});
+                                          },
+                                        ),
+                                        IconButton(
+                                          tooltip: 'Delete',
+                                          icon: const Icon(
+                                            Icons.delete_outline_rounded,
+                                            size: 20,
+                                          ),
+                                          onPressed: () async {
+                                            await CampaignManager.instance
+                                                .delete(name);
+                                            names =
+                                                await CampaignManager.instance
+                                                    .list();
+                                            setDialog(() {});
+                                            if (mounted) setState(() {});
+                                          },
+                                        ),
+                                      ],
+                                    ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () async {
+                        final name = await _promptText(
+                          title: 'New campaign',
+                          hint: 'Campaign name',
+                        );
+                        if (name == null) return;
+                        await CampaignManager.instance.create(name);
+                        names = await CampaignManager.instance.list();
+                        setDialog(() {});
+                      },
+                      child: const Text('New campaign'),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('Close'),
+                    ),
+                  ],
+                ),
+          ),
+    );
+  }
+
+  /// Small reusable text-input dialog. Returns the trimmed text, or null on
+  /// cancel / empty input.
+  Future<String?> _promptText({
+    required String title,
+    String initial = '',
+    String? hint,
+  }) async {
+    final controller = TextEditingController(text: initial);
+    final value = await showDialog<String>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: Text(title),
+            content: TextField(
+              controller: controller,
+              autofocus: true,
+              decoration: InputDecoration(labelText: hint),
+              onSubmitted: (v) => Navigator.of(context).pop(v.trim()),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed:
+                    () => Navigator.of(context).pop(controller.text.trim()),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+    );
+    controller.dispose();
+    if (value == null || value.isEmpty) return null;
+    return value;
   }
 
   // -- Scenes ---------------------------------------------------------------
@@ -96,55 +311,49 @@ class _SoundManagerScreenState extends State<SoundManagerScreen> {
     );
   }
 
+  /// Applies a scene, cross-fading the whole soundscape (all three channels at
+  /// once) when fades are enabled, or cutting instantly otherwise.
   Future<void> _applyScene(Scene scene) async {
+    final settings = AudioSettings.instance;
+    final useFade =
+        settings.fadeEnabled.value && settings.sceneFadeMs.value > 0;
+    final dur = settings.sceneFade;
+
+    // 1. Fade out (or stop) everything currently playing, in parallel.
+    if (useFade) {
+      await Future.wait(_managers.map((m) => m.fadeOutAndStop(dur)));
+    } else {
+      await Future.wait(_managers.map((m) => m.stop(fade: false)));
+    }
+    // 2. Swap volumes + playlists silently.
     for (final m in _managers) {
       final vol = scene.volumes[m.type.name];
       if (vol != null) {
         m.setVolume(vol);
         m.setVolumeSettings(vol); // persist, like a manual slider release
       }
-      await m.applyPlaylist(
-        scene.playlists[m.type.name],
-        autoplay: m.type != PlayerType.effect,
-      );
+      await m.loadPlaylistSilently(scene.playlists[m.type.name]);
     }
+    // 3. Fade the new scene in (effects never auto-play).
+    await Future.wait(
+      _managers.map((m) {
+        if (m.type == PlayerType.effect || m.playlist.isEmpty) {
+          return Future<void>.value();
+        }
+        return useFade ? m.startFadedIn(dur) : m.play();
+      }),
+    );
     if (mounted) setState(() {});
   }
 
   Future<void> _promptSaveScene() async {
-    final controller = TextEditingController();
-    final name = await showDialog<String>(
-      context: context,
-      builder:
-          (context) => AlertDialog(
-            title: const Text('Save scene'),
-            content: TextField(
-              controller: controller,
-              autofocus: true,
-              decoration: const InputDecoration(labelText: 'Scene name'),
-              onSubmitted: (v) => Navigator.of(context).pop(v.trim()),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed:
-                    () => Navigator.of(context).pop(controller.text.trim()),
-                child: const Text('Save'),
-              ),
-            ],
-          ),
-    );
-    controller.dispose();
-    if (name != null && name.isNotEmpty) {
-      await _saveCurrentAsScene(name);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Scene "$name" saved')),
-        );
-      }
+    final name = await _promptText(title: 'Save scene', hint: 'Scene name');
+    if (name == null) return;
+    await _saveCurrentAsScene(name);
+    if (mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Scene "$name" saved')));
     }
   }
 
@@ -159,7 +368,7 @@ class _SoundManagerScreenState extends State<SoundManagerScreen> {
                 (context, setDialog) => AlertDialog(
                   title: const Text('Scenes'),
                   content: SizedBox(
-                    width: 360,
+                    width: 380,
                     child:
                         scenes.isEmpty
                             ? const Text('No saved scene')
@@ -174,15 +383,58 @@ class _SoundManagerScreenState extends State<SoundManagerScreen> {
                                       Navigator.of(context).pop();
                                       _applyScene(scene);
                                     },
-                                    trailing: IconButton(
-                                      icon: const Icon(
-                                        Icons.delete_outline_rounded,
-                                      ),
-                                      onPressed: () async {
-                                        await SceneManager.delete(scene.name);
-                                        scenes = await SceneManager.list();
-                                        setDialog(() {});
-                                      },
+                                    trailing: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        IconButton(
+                                          tooltip: 'Rename',
+                                          icon: const Icon(
+                                            Icons.edit_outlined,
+                                            size: 20,
+                                          ),
+                                          onPressed: () async {
+                                            final n = await _promptText(
+                                              title: 'Rename scene',
+                                              initial: scene.name,
+                                            );
+                                            if (n == null) return;
+                                            await SceneManager.rename(
+                                              scene.name,
+                                              n,
+                                            );
+                                            scenes = await SceneManager.list();
+                                            setDialog(() {});
+                                          },
+                                        ),
+                                        IconButton(
+                                          tooltip: 'Duplicate',
+                                          icon: const Icon(
+                                            Icons.copy_rounded,
+                                            size: 20,
+                                          ),
+                                          onPressed: () async {
+                                            await SceneManager.duplicate(
+                                              scene.name,
+                                            );
+                                            scenes = await SceneManager.list();
+                                            setDialog(() {});
+                                          },
+                                        ),
+                                        IconButton(
+                                          tooltip: 'Delete',
+                                          icon: const Icon(
+                                            Icons.delete_outline_rounded,
+                                            size: 20,
+                                          ),
+                                          onPressed: () async {
+                                            await SceneManager.delete(
+                                              scene.name,
+                                            );
+                                            scenes = await SceneManager.list();
+                                            setDialog(() {});
+                                          },
+                                        ),
+                                      ],
                                     ),
                                   ),
                               ],
@@ -208,9 +460,8 @@ class _SoundManagerScreenState extends State<SoundManagerScreen> {
 
   @override
   void dispose() {
-    ambiancePlayer.dispose();
-    musicPlayer.dispose();
-    effectPlayer.dispose();
+    if (_isDesktop) windowManager.removeListener(this);
+    _disposeManagers();
     super.dispose();
   }
 
@@ -221,13 +472,40 @@ class _SoundManagerScreenState extends State<SoundManagerScreen> {
       for (int i = 0; i < s.effectKeys.length; i++)
         if (s.effectKeys[i] != null)
           SingleActivator(s.effectKeys[i]!): () => _triggerEffect(i),
+      for (final c in ShortcutSettings.shortcutChannels)
+        if (s.channelPause[c] != null)
+          SingleActivator(s.channelPause[c]!):
+              () => _toggleChannelPause(
+                c == PlayerType.ambiance ? ambiancePlayer : musicPlayer,
+              ),
+      for (final c in ShortcutSettings.shortcutChannels)
+        if (s.channelNext[c] != null)
+          SingleActivator(s.channelNext[c]!):
+              () =>
+                  (c == PlayerType.ambiance ? ambiancePlayer : musicPlayer)
+                      .nextTrack(),
     };
   }
 
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
-      title: const Text('Sound Manager'),
+      title: ValueListenableBuilder<String>(
+        valueListenable: CampaignManager.instance.current,
+        builder:
+            (context, campaign, child) => Row(
+              children: [
+                const Text('Sound Manager'),
+                const SizedBox(width: 12),
+                ActionChip(
+                  avatar: const Icon(Icons.folder_rounded, size: 18),
+                  label: Text(campaign),
+                  tooltip: 'Switch campaign',
+                  onPressed: _openCampaignsDialog,
+                ),
+              ],
+            ),
+      ),
       actions: [
         ListenableBuilder(
           listenable: Listenable.merge([
@@ -247,6 +525,21 @@ class _SoundManagerScreenState extends State<SoundManagerScreen> {
             );
           },
         ),
+        ValueListenableBuilder<bool>(
+          valueListenable: _generative.enabled,
+          builder:
+              (context, on, child) => IconButton(
+                tooltip:
+                    on
+                        ? 'Generative mode: ON'
+                        : 'Generative ambiance (random effects)',
+                icon: Icon(
+                  on ? Icons.casino_rounded : Icons.casino_outlined,
+                  color: on ? PlayerType.effect.style.color : null,
+                ),
+                onPressed: _generative.toggle,
+              ),
+        ),
         IconButton(
           tooltip: 'Scenes',
           icon: const Icon(Icons.movie_rounded),
@@ -256,9 +549,9 @@ class _SoundManagerScreenState extends State<SoundManagerScreen> {
           tooltip: 'Settings',
           icon: const Icon(Icons.settings_rounded),
           onPressed:
-              () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const SettingsScreen()),
-              ),
+              () => Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const SettingsScreen())),
         ),
         const SizedBox(width: 8),
       ],
@@ -270,23 +563,36 @@ class _SoundManagerScreenState extends State<SoundManagerScreen> {
             bindings: _shortcuts,
             child: Focus(autofocus: true, child: child!),
           ),
-      child: Column(
-        children: [
-          // Ambiance and Music run in parallel — side by side, each with its
-          // own tall track list and controls.
-          Expanded(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(child: AudioPlayerWidget(player: ambiancePlayer)),
-                Expanded(child: AudioPlayerWidget(player: musicPlayer)),
-              ],
+      // Keyed by campaign so switching rebuilds the channel widgets fresh
+      // (each re-runs loadSettings for the new campaign's data).
+      child: ValueListenableBuilder<String>(
+        valueListenable: CampaignManager.instance.current,
+        builder:
+            (context, campaign, child) => KeyedSubtree(
+              key: ValueKey(campaign),
+              child: Column(
+                children: [
+                  // Ambiance and Music run in parallel — side by side, each
+                  // with its own tall track list and controls.
+                  Expanded(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Expanded(
+                          child: AudioPlayerWidget(player: ambiancePlayer),
+                        ),
+                        Expanded(child: AudioPlayerWidget(player: musicPlayer)),
+                      ],
+                    ),
+                  ),
+                  // Effects: a full-width soundboard docked at the bottom.
+                  EffectsPlayerWidget(
+                    player: effectPlayer,
+                    generative: _generative,
+                  ),
+                ],
+              ),
             ),
-          ),
-          // Effects: a full-width soundboard docked at the bottom, always
-          // visible.
-          EffectsPlayerWidget(player: effectPlayer),
-        ],
       ),
     ),
   );

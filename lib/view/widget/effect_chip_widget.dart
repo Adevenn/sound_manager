@@ -87,10 +87,10 @@ class _EffectChipState extends State<EffectChip> {
       curve: Curves.easeOut,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 120),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.all(6),
         decoration: BoxDecoration(
           color: bg,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(color: borderColor, width: active ? 2 : 1),
           boxShadow:
               _hovering || active
@@ -105,31 +105,50 @@ class _EffectChipState extends State<EffectChip> {
                   ]
                   : null,
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
+        // Square launchpad tile: big centred icon, name beneath, small badges
+        // (loop / generative) in the top-right corner.
+        child: Stack(
           children: [
-            Icon(
-              _arming ? Icons.tune_rounded : icon,
-              size: 18,
-              color: _arming ? accent : fg,
-            ),
-            const SizedBox(width: 6),
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 140),
-              child: Text(
-                track.name,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: fg),
+            Positioned.fill(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    _arming ? Icons.tune_rounded : icon,
+                    size: 26,
+                    color: _arming ? accent : fg,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    track.name,
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: fg, fontSize: 11, height: 1.05),
+                  ),
+                ],
               ),
             ),
-            if (track.loop) ...[
-              const SizedBox(width: 4),
-              Icon(
-                _held ? Icons.graphic_eq_rounded : Icons.touch_app_rounded,
-                size: 14,
-                color: _held ? accent : fg,
+            if (track.loop || track.generative)
+              Positioned(
+                top: 0,
+                right: 0,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (track.generative)
+                      Icon(Icons.casino_rounded, size: 12, color: fg),
+                    if (track.loop)
+                      Icon(
+                        _held
+                            ? Icons.graphic_eq_rounded
+                            : Icons.touch_app_rounded,
+                        size: 12,
+                        color: _held ? accent : fg,
+                      ),
+                  ],
+                ),
               ),
-            ],
           ],
         ),
       ),

@@ -18,7 +18,10 @@ class PlaylistRepository {
       name.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_').trim();
 
   static Future<File> _fileFor(String name) async => File(
-    p.join((await AppDirectories.playlists()).path, '${_safeFileName(name)}.json'),
+    p.join(
+      (await AppDirectories.playlists()).path,
+      '${_safeFileName(name)}.json',
+    ),
   );
 
   /// Loads the playlist stored under [name]. Throws if the file is missing or
@@ -60,5 +63,42 @@ class PlaylistRepository {
   static Future<void> delete(String name) async {
     final file = await _fileFor(name);
     if (await file.exists()) await file.delete();
+  }
+
+  /// Renames the saved playlist [oldName] to [newName] (also updates the id-less
+  /// name field inside the file). No-op if the source is missing.
+  static Future<void> rename(String oldName, String newName) async {
+    final clean = _safeFileName(newName);
+    if (clean.isEmpty || clean == _safeFileName(oldName)) return;
+    final Playlist playlist;
+    try {
+      playlist = await load(oldName);
+    } catch (_) {
+      return;
+    }
+    playlist.rename(clean);
+    await save(playlist);
+    await delete(oldName);
+  }
+
+  /// Saves a copy of [name] under `<name> (copy)` (uniquified) and returns the
+  /// new name, or null if the source could not be read.
+  static Future<String?> duplicate(String name) async {
+    final Playlist source;
+    try {
+      source = await load(name);
+    } catch (_) {
+      return null;
+    }
+    final existing = (await listAll()).toSet();
+    var copy = '$name (copy)';
+    var n = 2;
+    while (existing.contains(_safeFileName(copy))) {
+      copy = '$name (copy $n)';
+      n++;
+    }
+    source.rename(copy);
+    await save(source);
+    return copy;
   }
 }

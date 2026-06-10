@@ -28,9 +28,7 @@ class AppTheme {
         color: scheme.surfaceContainerHigh,
         clipBehavior: Clip.antiAlias,
         margin: const EdgeInsets.all(8),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
       appBarTheme: AppBarTheme(
         centerTitle: false,

@@ -1,8 +1,12 @@
 library;
 
 export 'model/app_directories.dart';
+export 'model/audio_formats.dart';
 export 'model/audio_player_manager.dart';
 export 'model/audio_settings.dart';
+export 'model/campaign_manager.dart';
+export 'model/duck_controller.dart';
+export 'model/generative_trigger.dart';
 export 'model/effect_style.dart';
 export 'model/player_type.enum.dart';
 export 'model/playlist.dart';

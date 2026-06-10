@@ -3,6 +3,7 @@ import 'package:sound_manager/model.dart';
 import 'package:sound_manager/view/loading.dart';
 import 'package:sound_manager/view/theme/app_theme.dart';
 import 'package:sound_manager/view/widget/audio_volume_widget.dart';
+import 'package:sound_manager/view/widget/channel_drop_target.dart';
 import 'package:sound_manager/view/widget/playlist_button_widget.dart';
 
 class AudioPlayerWidget extends StatefulWidget {
@@ -85,8 +86,7 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
         (context, on, child) => IconButton(
           tooltip: 'Shuffle',
           icon: Icon(Icons.shuffle_rounded, size: 26),
-          color:
-              on ? _accent : Theme.of(context).colorScheme.onSurfaceVariant,
+          color: on ? _accent : Theme.of(context).colorScheme.onSurfaceVariant,
           onPressed: () => playlist.toggleShuffle(),
         ),
   );
@@ -286,7 +286,10 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
               Row(
                 children: [
                   Expanded(child: _timer),
-                  SizedBox(width: 140, child: AudioVolumeWidget(player: player)),
+                  SizedBox(
+                    width: 140,
+                    child: AudioVolumeWidget(player: player),
+                  ),
                 ],
               ),
             ],
@@ -303,14 +306,24 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
         return ListenableBuilder(
           listenable: player.playlistRevision,
           builder:
-              (context, child) => Card(
-                clipBehavior: Clip.antiAlias,
-                child: Column(
-                  children: [
-                    _channelHeader(context),
-                    Expanded(child: _trackList()),
-                    _controlBar(),
-                  ],
+              (context, child) => ChannelDropTarget(
+                accent: _accent,
+                onFiles: (paths) {
+                  for (final path in paths) {
+                    player.playlist.addSoundtrack(path);
+                  }
+                  player.refreshPlaylist();
+                  setState(() {});
+                },
+                child: Card(
+                  clipBehavior: Clip.antiAlias,
+                  child: Column(
+                    children: [
+                      _channelHeader(context),
+                      Expanded(child: _trackList()),
+                      _controlBar(),
+                    ],
+                  ),
                 ),
               ),
         );

@@ -15,7 +15,8 @@ class Scene {
   Scene.fromJson(Map<String, dynamic> json)
     : name = json['name'],
       playlists = Map<String, String>.from(json['playlists'] ?? {}),
-      volumes = (json['volumes'] as Map?)?.map(
+      volumes =
+          (json['volumes'] as Map?)?.map(
             (k, v) => MapEntry(k as String, (v as num).toDouble()),
           ) ??
           {};

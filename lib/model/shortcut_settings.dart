@@ -1,17 +1,24 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:sound_manager/model/player_type.enum.dart';
 import 'package:sound_manager/model/prefs.dart';
 
 /// User-rebindable keyboard shortcuts, backed by the shared [Prefs] instance.
 ///
-/// Two groups of actions:
+/// Action groups:
 /// - [playPauseAll]: global pause/resume for the ambiance + music channels.
-/// - [effectKeys]: one key per soundboard slot (slot `i` triggers the
-///   `i`-th effect). A `null` slot means "no key bound".
+/// - [effectKeys]: one key per soundboard slot (slot `i` triggers the i-th
+///   effect). A `null` slot means "no key bound".
+/// - [channelPause] / [channelNext]: per-channel pause and skip, for ambiance
+///   and music independently (all `null` by default).
+///
+/// A given key can only drive one action: assigning it steals it from any other
+/// (nullable) binding. The always-bound [playPauseAll] key is reserved and
+/// cannot be taken by another binding.
 ///
 /// Keys are persisted by their stable [LogicalKeyboardKey.keyId]. The
-/// [revision] notifier lets the live UI (the global shortcut handler) rebuild
-/// its bindings as soon as the user reassigns a key.
+/// [revision] notifier lets the live UI rebuild its bindings as soon as the
+/// user reassigns a key.
 class ShortcutSettings {
   ShortcutSettings._();
   static final ShortcutSettings instance = ShortcutSettings._();
@@ -19,8 +26,16 @@ class ShortcutSettings {
   /// Number of bindable soundboard slots (effects 1..9).
   static const int effectSlots = 9;
 
+  /// Channels that support per-channel pause/skip shortcuts.
+  static const List<PlayerType> shortcutChannels = [
+    PlayerType.ambiance,
+    PlayerType.music,
+  ];
+
   static const _kPlayPause = 'sc_play_pause';
   static const _kEffectPrefix = 'sc_effect_';
+  static const _kPausePrefix = 'sc_pause_';
+  static const _kNextPrefix = 'sc_next_';
   // Sentinel persisted for a deliberately-cleared slot (no key id is 0).
   static const int _unbound = 0;
 
@@ -30,6 +45,13 @@ class ShortcutSettings {
     effectSlots,
     (i) => _defaultDigits[i],
   );
+
+  final Map<PlayerType, LogicalKeyboardKey?> channelPause = {
+    for (final c in shortcutChannels) c: null,
+  };
+  final Map<PlayerType, LogicalKeyboardKey?> channelNext = {
+    for (final c in shortcutChannels) c: null,
+  };
 
   static const List<LogicalKeyboardKey> _defaultDigits = [
     LogicalKeyboardKey.digit1,
@@ -56,37 +78,84 @@ class ShortcutSettings {
         effectKeys[i] = v == _unbound ? null : LogicalKeyboardKey(v);
       }
     }
+    for (final c in shortcutChannels) {
+      final pause = p.getInt('$_kPausePrefix${c.name}');
+      if (pause != null) {
+        channelPause[c] = pause == _unbound ? null : LogicalKeyboardKey(pause);
+      }
+      final next = p.getInt('$_kNextPrefix${c.name}');
+      if (next != null) {
+        channelNext[c] = next == _unbound ? null : LogicalKeyboardKey(next);
+      }
+    }
+  }
+
+  // -- Conflict handling ----------------------------------------------------
+
+  /// Removes [key] from every *nullable* binding (effects + per-channel),
+  /// persisting each cleared slot. The always-bound [playPauseAll] is left
+  /// untouched (it is reserved).
+  void _clearKeyFromNullable(LogicalKeyboardKey key) {
+    for (var i = 0; i < effectSlots; i++) {
+      if (effectKeys[i] == key) {
+        effectKeys[i] = null;
+        Prefs.instance.setInt('$_kEffectPrefix$i', _unbound);
+      }
+    }
+    for (final c in shortcutChannels) {
+      if (channelPause[c] == key) {
+        channelPause[c] = null;
+        Prefs.instance.setInt('$_kPausePrefix${c.name}', _unbound);
+      }
+      if (channelNext[c] == key) {
+        channelNext[c] = null;
+        Prefs.instance.setInt('$_kNextPrefix${c.name}', _unbound);
+      }
+    }
   }
 
   void setPlayPauseAll(LogicalKeyboardKey key) {
-    // A key can only drive one action: steal it from any effect slot using it.
-    for (var i = 0; i < effectSlots; i++) {
-      if (effectKeys[i] == key) _storeEffectKey(i, null);
-    }
+    _clearKeyFromNullable(key); // steal it from any effect/channel slot
     playPauseAll = key;
     Prefs.instance.setInt(_kPlayPause, key.keyId);
     revision.value++;
   }
 
-  /// Binds [key] to [slot]. Returns false (and does nothing) when the key is
-  /// already taken by the global play/pause action; a key used by another
-  /// effect slot is silently stolen from it.
+  /// Binds [key] to effect [slot]. Returns false (no change) when [key] is the
+  /// reserved play/pause key; a key used elsewhere is stolen from it.
   bool setEffectKey(int slot, LogicalKeyboardKey? key) {
     if (slot < 0 || slot >= effectSlots) return false;
     if (key != null) {
       if (key == playPauseAll) return false;
-      for (var i = 0; i < effectSlots; i++) {
-        if (i != slot && effectKeys[i] == key) _storeEffectKey(i, null);
-      }
+      _clearKeyFromNullable(key);
     }
-    _storeEffectKey(slot, key);
+    effectKeys[slot] = key;
+    Prefs.instance.setInt('$_kEffectPrefix$slot', key?.keyId ?? _unbound);
     revision.value++;
     return true;
   }
 
-  void _storeEffectKey(int slot, LogicalKeyboardKey? key) {
-    effectKeys[slot] = key;
-    Prefs.instance.setInt('$_kEffectPrefix$slot', key?.keyId ?? _unbound);
+  bool setChannelPause(PlayerType channel, LogicalKeyboardKey? key) =>
+      _setChannelKey(channelPause, _kPausePrefix, channel, key);
+
+  bool setChannelNext(PlayerType channel, LogicalKeyboardKey? key) =>
+      _setChannelKey(channelNext, _kNextPrefix, channel, key);
+
+  bool _setChannelKey(
+    Map<PlayerType, LogicalKeyboardKey?> map,
+    String prefix,
+    PlayerType channel,
+    LogicalKeyboardKey? key,
+  ) {
+    if (!map.containsKey(channel)) return false;
+    if (key != null) {
+      if (key == playPauseAll) return false;
+      _clearKeyFromNullable(key);
+    }
+    map[channel] = key;
+    Prefs.instance.setInt('$prefix${channel.name}', key?.keyId ?? _unbound);
+    revision.value++;
+    return true;
   }
 
   void resetDefaults() {
@@ -94,10 +163,18 @@ class ShortcutSettings {
     for (var i = 0; i < effectSlots; i++) {
       effectKeys[i] = _defaultDigits[i];
     }
+    for (final c in shortcutChannels) {
+      channelPause[c] = null;
+      channelNext[c] = null;
+    }
     final p = Prefs.instance;
     p.remove(_kPlayPause);
     for (var i = 0; i < effectSlots; i++) {
       p.remove('$_kEffectPrefix$i');
+    }
+    for (final c in shortcutChannels) {
+      p.remove('$_kPausePrefix${c.name}');
+      p.remove('$_kNextPrefix${c.name}');
     }
     revision.value++;
   }

@@ -142,6 +142,9 @@ class AudioPlayerManager {
     _playlist = _emptyPlaylist();
     _playlist.trackIndex.addListener(_persistTrackIndex);
     AudioSettings.instance.masterVolume.addListener(_onMasterChanged);
+    if (_type != PlayerType.effect) {
+      DuckController.instance.factor.addListener(_onDuckChanged);
+    }
     _setStreams();
   }
 
@@ -173,9 +176,15 @@ class AudioPlayerManager {
     _loadTrack();
   }
 
+  /// The audioplayers source for the currently-loaded track, kept in sync with
+  /// [_path] so playback works for both local files and URL streams.
+  Source? _currentSource;
+
   void _loadTrack() {
-    if (playlist.actualSoundtrack != null) {
-      _path.value = playlist.actualSoundtrack!.source;
+    final track = playlist.actualSoundtrack;
+    if (track != null) {
+      _path.value = track.source;
+      _currentSource = track.audioSource;
     }
   }
 
@@ -220,13 +229,14 @@ class AudioPlayerManager {
     }
   }
 
-  /// Replaces this channel's playlist with the saved one named [name] (used by
-  /// scenes). Pass an empty/null name to clear the channel.
-  Future<void> applyPlaylist(String? name, {bool autoplay = true}) async {
-    await stop(fade: false);
+  /// Swaps this channel's playlist to the saved one named [name] **without**
+  /// touching playback (no stop, no play). Used as the silent middle step of a
+  /// faded scene transition. Pass an empty/null name to clear the channel.
+  Future<void> loadPlaylistSilently(String? name) async {
     if (name == null || name.isEmpty) {
       playlist = _emptyPlaylist();
       _path.value = null;
+      _currentSource = null;
       await UserSettings.setCurrentPlaylist(type, '');
       return;
     }
@@ -238,8 +248,51 @@ class AudioPlayerManager {
       await UserSettings.setCurrentPlaylist(type, '');
     }
     _path.value = null;
+    _currentSource = null;
     _loadTrack();
+  }
+
+  /// Replaces this channel's playlist with the saved one named [name] (used by
+  /// scenes). Pass an empty/null name to clear the channel.
+  Future<void> applyPlaylist(String? name, {bool autoplay = true}) async {
+    await stop(fade: false);
+    await loadPlaylistSilently(name);
     if (autoplay && playlist.isNotEmpty) await play();
+  }
+
+  /// Fades the channel down to silence over [duration] then stops it. No-op
+  /// (immediate stop) when nothing is playing. Used by scene transitions.
+  Future<void> fadeOutAndStop(Duration duration) async {
+    if (!isPlaying) {
+      await stop(fade: false);
+      return;
+    }
+    final player = _active;
+    await _fade(player, 0.0, duration);
+    _changeState(PlayerState.stopped);
+    _cancelFades();
+    await player.stop();
+    await _inactive.stop();
+    _position.value = Duration.zero;
+  }
+
+  /// Starts the current track from silence and ramps up to the target volume
+  /// over [duration]. Used by scene transitions (the new scene fading in).
+  Future<void> startFadedIn(Duration duration) async {
+    if (_path.value == null || _currentSource == null) _loadTrack();
+    if (_currentSource == null) return;
+    _cancelFades();
+    await _active.stop();
+    _applyVolume(_active, 0.0);
+    _changeState(PlayerState.playing);
+    try {
+      await _active.play(_currentSource!);
+      _position.value = Duration.zero;
+      await _fade(_active, _targetVolume, duration);
+    } catch (e) {
+      debugPrint('startFadedIn failed for "${_path.value}": $e');
+      _changeState(PlayerState.stopped);
+    }
   }
 
   /// Subscribes to both players' streams once. Each notifier only follows the
@@ -273,8 +326,26 @@ class AudioPlayerManager {
   /// already scaled by the global master volume.
   double get _targetVolume {
     if (isMuted.value) return 0.0;
-    return (_volume.value * AudioSettings.instance.masterVolume.value)
+    // Ambiance and music duck while effects play; effects never duck.
+    final duck =
+        _type == PlayerType.effect ? 1.0 : DuckController.instance.factor.value;
+    return (_volume.value * AudioSettings.instance.masterVolume.value * duck)
         .clamp(0.0, 1.0);
+  }
+
+  /// Updates the global duck state from this (effects) channel's activity.
+  void _refreshDuck() {
+    if (_type != PlayerType.effect) return;
+    DuckController.instance.setEffectsActive(_busyEffects.isNotEmpty);
+  }
+
+  /// Ramps the live volume toward the new ducked/un-ducked target. Skipped
+  /// while a fade is running so it doesn't fight a track-change ramp.
+  void _onDuckChanged() {
+    if (_type == PlayerType.effect) return;
+    if (isPlaying && !_isFading) {
+      _fade(_active, _targetVolume, const Duration(milliseconds: 350));
+    }
   }
 
   double _volOf(AudioPlayer p) => identical(p, _playerA) ? _volA : _volB;
@@ -401,7 +472,10 @@ class AudioPlayerManager {
     // Room left: spawn a new one.
     if (_effectPool.length < _maxEffectPlayers) {
       final p = AudioPlayer();
-      p.onPlayerComplete.listen((_) => _busyEffects.remove(p));
+      p.onPlayerComplete.listen((_) {
+        _busyEffects.remove(p);
+        _refreshDuck();
+      });
       _effectPool.add(p);
       return p;
     }
@@ -428,7 +502,8 @@ class AudioPlayerManager {
     try {
       await player.setReleaseMode(ReleaseMode.release);
       await player.setVolume((_targetVolume * track.volume).clamp(0.0, 1.0));
-      await player.play(DeviceFileSource(track.source));
+      await player.play(track.audioSource);
+      _refreshDuck();
     } catch (e) {
       // Triggers are not awaited by the UI: a missing/unreadable file must not
       // become an unhandled async error.
@@ -446,7 +521,8 @@ class AudioPlayerManager {
     try {
       await player.setReleaseMode(ReleaseMode.loop);
       await player.setVolume((_targetVolume * track.volume).clamp(0.0, 1.0));
-      await player.play(DeviceFileSource(track.source));
+      await player.play(track.audioSource);
+      _refreshDuck();
     } catch (e) {
       debugPrint('startLoopEffect failed for "${track.source}": $e');
       _busyEffects.remove(player);
@@ -460,6 +536,7 @@ class AudioPlayerManager {
     await player.stop();
     await player.setReleaseMode(ReleaseMode.release);
     _busyEffects.remove(player);
+    _refreshDuck();
   }
 
   /// Immediately stops every running effect (for the global stop).
@@ -469,6 +546,7 @@ class AudioPlayerManager {
     }
     _busyEffects.clear();
     _heldLoops.clear();
+    _refreshDuck();
   }
 
   void _changeState(PlayerState newState) => _state.value = newState;
@@ -477,6 +555,9 @@ class AudioPlayerManager {
     _cancelFades();
     _playlist.trackIndex.removeListener(_persistTrackIndex);
     AudioSettings.instance.masterVolume.removeListener(_onMasterChanged);
+    if (_type != PlayerType.effect) {
+      DuckController.instance.factor.removeListener(_onDuckChanged);
+    }
     for (final sub in _subs) {
       sub.cancel();
     }
@@ -541,8 +622,8 @@ class AudioPlayerManager {
     // The playlist may have just been filled without a track being loaded yet
     // (e.g. drag-and-drop in the editor): make sure a source is selected so the
     // main play button works without first clicking a track in the list.
-    if (_path.value == null) _loadTrack();
-    if (_path.value == null) return;
+    if (_path.value == null || _currentSource == null) _loadTrack();
+    if (_path.value == null || _currentSource == null) return;
     final settings = AudioSettings.instance;
     final useFade = fade && settings.fadeEnabled.value;
     final duration = short ? settings.shortFade : settings.longFade;
@@ -558,7 +639,7 @@ class AudioPlayerManager {
         _usingA = !_usingA; // incoming becomes active (drives the UI)
         _position.value = Duration.zero;
         _changeState(PlayerState.playing);
-        await incoming.play(DeviceFileSource(_path.value!));
+        await incoming.play(_currentSource!);
         // _crossfade stops `outgoing` itself, on either completion or cancel.
         await _crossfade(outgoing, incoming, _targetVolume, duration);
       } else {
@@ -567,7 +648,7 @@ class AudioPlayerManager {
         await _active.stop();
         _applyVolume(_active, useFade ? 0.0 : _targetVolume);
         _changeState(PlayerState.playing);
-        await _active.play(DeviceFileSource(_path.value!));
+        await _active.play(_currentSource!);
         _position.value = Duration.zero;
         if (useFade) await _fade(_active, _targetVolume, duration);
       }

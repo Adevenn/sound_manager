@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:sound_manager/model.dart';
+import 'package:sound_manager/view/theme/app_theme.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -49,9 +50,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             builder:
                 (context, value, child) => SwitchListTile(
                   title: const Text('Fades (fade in/out)'),
-                  subtitle: const Text(
-                    'Smooth transitions on play/pause',
-                  ),
+                  subtitle: const Text('Smooth transitions on play/pause'),
                   value: value,
                   onChanged: settings.setFadeEnabled,
                 ),
@@ -94,6 +93,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onChangeEnd: (v) => settings.setLongFadeMs(v),
                 ),
           ),
+          ValueListenableBuilder<int>(
+            valueListenable: settings.sceneFadeMs,
+            builder:
+                (context, value, child) => _durationRow(
+                  label: 'Scene transition',
+                  ms: value,
+                  min: 0,
+                  max: 8000,
+                  onChanged: (v) => settings.sceneFadeMs.value = v,
+                  onChangeEnd: (v) => settings.setSceneFadeMs(v),
+                ),
+          ),
+          const Divider(),
+          _duckSection(),
+          const Divider(),
+          _generativeSection(),
           const Divider(),
           _shortcutsSection(),
         ],
@@ -101,7 +116,133 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  // -- Auto-duck ------------------------------------------------------------
+
+  Widget _duckSection() => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      _sectionTitle('Auto-duck'),
+      ValueListenableBuilder<bool>(
+        valueListenable: settings.duckEnabled,
+        builder:
+            (context, on, child) => SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Duck music & ambiance under effects'),
+              subtitle: const Text(
+                'Lowers the other channels while an effect plays',
+              ),
+              value: on,
+              onChanged: settings.setDuckEnabled,
+            ),
+      ),
+      ValueListenableBuilder<double>(
+        valueListenable: settings.duckAmount,
+        builder:
+            (context, value, child) => Row(
+              children: [
+                const SizedBox(width: 180, child: Text('Duck to level')),
+                Expanded(
+                  child: Slider(
+                    value: value,
+                    min: 0.0,
+                    max: 1.0,
+                    divisions: 20,
+                    label: '${(value * 100).round()}%',
+                    onChanged: (v) => settings.duckAmount.value = v,
+                    onChangeEnd: settings.setDuckAmount,
+                  ),
+                ),
+                SizedBox(width: 48, child: Text('${(value * 100).round()}%')),
+              ],
+            ),
+      ),
+    ],
+  );
+
+  // -- Generative ambiance --------------------------------------------------
+
+  Widget _generativeSection() => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      _sectionTitle('Generative ambiance'),
+      Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Text(
+          'Random delay between two automatic effect triggers. Flag effects '
+          'as "Generative" in their settings to include them.',
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ),
+      ValueListenableBuilder<int>(
+        valueListenable: settings.genMinSec,
+        builder:
+            (context, value, child) => _secondsRow(
+              label: 'Minimum delay',
+              seconds: value,
+              min: 1,
+              max: 300,
+              onChanged: (v) => settings.genMinSec.value = v,
+              onChangeEnd: (v) {
+                // Keep min <= max.
+                if (v > settings.genMaxSec.value) settings.setGenMaxSec(v);
+                settings.setGenMinSec(v);
+              },
+            ),
+      ),
+      ValueListenableBuilder<int>(
+        valueListenable: settings.genMaxSec,
+        builder:
+            (context, value, child) => _secondsRow(
+              label: 'Maximum delay',
+              seconds: value,
+              min: 1,
+              max: 600,
+              onChanged: (v) => settings.genMaxSec.value = v,
+              onChangeEnd: (v) {
+                if (v < settings.genMinSec.value) settings.setGenMinSec(v);
+                settings.setGenMaxSec(v);
+              },
+            ),
+      ),
+    ],
+  );
+
+  Widget _secondsRow({
+    required String label,
+    required int seconds,
+    required int min,
+    required int max,
+    required ValueChanged<int> onChanged,
+    required ValueChanged<int> onChangeEnd,
+  }) => Row(
+    children: [
+      SizedBox(width: 180, child: Text(label)),
+      Expanded(
+        child: Slider(
+          value: seconds.toDouble().clamp(min.toDouble(), max.toDouble()),
+          min: min.toDouble(),
+          max: max.toDouble(),
+          label: '${seconds}s',
+          onChanged: (v) => onChanged(v.round()),
+          onChangeEnd: (v) => onChangeEnd(v.round()),
+        ),
+      ),
+      SizedBox(width: 48, child: Text('${seconds}s')),
+    ],
+  );
+
   // -- Shortcuts ------------------------------------------------------------
+
+  void _keyTakenMessage() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('This key is already used by Play / Pause all'),
+      ),
+    );
+  }
 
   Widget _shortcutsSection() {
     return ValueListenableBuilder<int>(
@@ -138,6 +279,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   if (key != null) shortcuts.setPlayPauseAll(key);
                 },
               ),
+              for (final c in ShortcutSettings.shortcutChannels) ...[
+                _shortcutRow(
+                  icon: c.style.icon,
+                  label: 'Pause ${c.style.label}',
+                  current: shortcuts.channelPause[c],
+                  onRebind: () async {
+                    final key = await _captureKey();
+                    if (key == null) return;
+                    if (!shortcuts.setChannelPause(c, key)) {
+                      _keyTakenMessage();
+                    }
+                  },
+                  onClear: () => shortcuts.setChannelPause(c, null),
+                ),
+                _shortcutRow(
+                  icon: Icons.skip_next_rounded,
+                  label: 'Next ${c.style.label}',
+                  current: shortcuts.channelNext[c],
+                  onRebind: () async {
+                    final key = await _captureKey();
+                    if (key == null) return;
+                    if (!shortcuts.setChannelNext(c, key)) {
+                      _keyTakenMessage();
+                    }
+                  },
+                  onClear: () => shortcuts.setChannelNext(c, null),
+                ),
+              ],
               const Divider(),
               for (int i = 0; i < ShortcutSettings.effectSlots; i++)
                 _shortcutRow(
