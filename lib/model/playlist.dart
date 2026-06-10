@@ -112,9 +112,17 @@ class Playlist {
       _tracks.add(Soundtrack(path, SoundtrackType.local));
 
   void removeTrack(int index) {
+    final current = actualSoundtrack;
+    final removedCurrent = identical(_tracks[index], current);
     _tracks.removeAt(index);
-    if (_trackIndex.value >= _tracks.length) {
-      _trackIndex.value = _tracks.isEmpty ? 0 : _tracks.length - 1;
+    if (_tracks.isEmpty) {
+      _trackIndex.value = 0;
+    } else if (!removedCurrent && current != null) {
+      // Removing another row must not shift the selection off the track that
+      // is currently playing.
+      _trackIndex.value = _tracks.indexOf(current);
+    } else if (_trackIndex.value >= _tracks.length) {
+      _trackIndex.value = _tracks.length - 1;
     }
     _shuffleBag.clear();
   }

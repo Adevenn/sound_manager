@@ -86,7 +86,9 @@ class _SoundManagerScreenState extends State<SoundManagerScreen> {
     final volumes = <String, double>{};
     for (final m in _managers) {
       if (m.playlist.isNotEmpty) await PlaylistRepository.save(m.playlist);
-      playlists[m.type.name] = m.playlist.name;
+      // An empty channel is recorded as '' so applying the scene clears it,
+      // instead of pointing at a playlist file that was never written.
+      playlists[m.type.name] = m.playlist.isNotEmpty ? m.playlist.name : '';
       volumes[m.type.name] = m.volume.value;
     }
     await SceneManager.add(
@@ -97,7 +99,10 @@ class _SoundManagerScreenState extends State<SoundManagerScreen> {
   Future<void> _applyScene(Scene scene) async {
     for (final m in _managers) {
       final vol = scene.volumes[m.type.name];
-      if (vol != null) m.setVolume(vol);
+      if (vol != null) {
+        m.setVolume(vol);
+        m.setVolumeSettings(vol); // persist, like a manual slider release
+      }
       await m.applyPlaylist(
         scene.playlists[m.type.name],
         autoplay: m.type != PlayerType.effect,
@@ -132,6 +137,7 @@ class _SoundManagerScreenState extends State<SoundManagerScreen> {
             ],
           ),
     );
+    controller.dispose();
     if (name != null && name.isNotEmpty) {
       await _saveCurrentAsScene(name);
       if (mounted) {

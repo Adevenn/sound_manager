@@ -181,6 +181,11 @@ class _AudioPlayerWidgetState extends State<EffectsPlayerWidget> {
               ),
             ),
           ),
+          IconButton(
+            tooltip: 'Stop all effects',
+            icon: const Icon(Icons.stop_circle_outlined),
+            onPressed: () => player.stopEffects(),
+          ),
           SizedBox(width: 150, child: AudioVolumeWidget(player: player)),
           const SizedBox(width: 4),
           PlaylistButtonWidget(

@@ -34,6 +34,11 @@ class PlaylistButtonWidget extends StatelessWidget {
         if (player.type != PlayerType.effect) {
           player.changeTrack(newPlaylist.actualSoundtrack);
         }
+      } else {
+        // Most edits mutate the playlist instance in place, so the setter
+        // above never runs: re-publish to refresh the list and the
+        // missing-file markers.
+        player.refreshPlaylist();
       }
       callback();
     },

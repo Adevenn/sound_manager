@@ -59,16 +59,34 @@ class ShortcutSettings {
   }
 
   void setPlayPauseAll(LogicalKeyboardKey key) {
+    // A key can only drive one action: steal it from any effect slot using it.
+    for (var i = 0; i < effectSlots; i++) {
+      if (effectKeys[i] == key) _storeEffectKey(i, null);
+    }
     playPauseAll = key;
     Prefs.instance.setInt(_kPlayPause, key.keyId);
     revision.value++;
   }
 
-  void setEffectKey(int slot, LogicalKeyboardKey? key) {
-    if (slot < 0 || slot >= effectSlots) return;
+  /// Binds [key] to [slot]. Returns false (and does nothing) when the key is
+  /// already taken by the global play/pause action; a key used by another
+  /// effect slot is silently stolen from it.
+  bool setEffectKey(int slot, LogicalKeyboardKey? key) {
+    if (slot < 0 || slot >= effectSlots) return false;
+    if (key != null) {
+      if (key == playPauseAll) return false;
+      for (var i = 0; i < effectSlots; i++) {
+        if (i != slot && effectKeys[i] == key) _storeEffectKey(i, null);
+      }
+    }
+    _storeEffectKey(slot, key);
+    revision.value++;
+    return true;
+  }
+
+  void _storeEffectKey(int slot, LogicalKeyboardKey? key) {
     effectKeys[slot] = key;
     Prefs.instance.setInt('$_kEffectPrefix$slot', key?.keyId ?? _unbound);
-    revision.value++;
   }
 
   void resetDefaults() {

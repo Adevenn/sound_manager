@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:sound_manager/model.dart';
 import 'package:sound_manager/view/theme/app_theme.dart';
@@ -44,6 +45,12 @@ class _EffectChipState extends State<EffectChip> {
   bool _arming = false; // long-press in progress → opening config
 
   Soundtrack get track => widget.track;
+
+  void _releaseHold() {
+    if (!_held) return;
+    setState(() => _held = false);
+    widget.onHoldEnd();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -130,22 +137,23 @@ class _EffectChipState extends State<EffectChip> {
 
     final gesture =
         track.loop
-            ? GestureDetector(
-              onTapDown: (_) {
-                setState(() => _held = true);
-                widget.onHoldStart();
+            // Press-and-hold uses raw pointer events, NOT tap + long-press
+            // gestures: a competing LongPressGestureRecognizer wins the arena
+            // after ~500 ms and cancels the tap, which would release the loop
+            // while the button is still physically held.
+            ? Listener(
+              onPointerDown: (event) {
+                if (event.buttons == kPrimaryButton) {
+                  setState(() => _held = true);
+                  widget.onHoldStart();
+                }
               },
-              onTapUp: (_) {
-                setState(() => _held = false);
-                widget.onHoldEnd();
-              },
-              onTapCancel: () {
-                setState(() => _held = false);
-                widget.onHoldEnd();
-              },
-              onSecondaryTap: widget.onConfig,
-              onLongPress: () {}, // swallow so a hold doesn't open config
-              child: chip,
+              onPointerUp: (_) => _releaseHold(),
+              onPointerCancel: (_) => _releaseHold(),
+              child: GestureDetector(
+                onSecondaryTap: widget.onConfig,
+                child: chip,
+              ),
             )
             : GestureDetector(
               onTapDown: (_) => setState(() => _pressed = true),

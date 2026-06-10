@@ -103,16 +103,26 @@ class AudioPlayerManager {
   void _persistTrackIndex() =>
       UserSettings.setTrackIndex(type, _playlist.trackIndex.value);
 
-  /// Asynchronously checks every local track's file and publishes the ids of
-  /// the missing ones to [missingTrackIds].
+  /// Asynchronously checks every local track's file (in parallel) and publishes
+  /// the ids of the missing ones to [missingTrackIds].
   Future<void> _validateTracks() async {
     final playlist = _playlist;
-    final missing = <String>{};
-    for (final track in playlist.tracks) {
-      if (!await track.exists()) missing.add(track.id);
-    }
+    final tracks = List.of(playlist.tracks);
+    final exists = await Future.wait(tracks.map((t) => t.exists()));
+    final missing = <String>{
+      for (var i = 0; i < tracks.length; i++)
+        if (!exists[i]) tracks[i].id,
+    };
     // Guard against a playlist swap that happened while we were awaiting.
     if (identical(playlist, _playlist)) missingTrackIds.value = missing;
+  }
+
+  /// Re-publishes the current playlist after it was edited **in place** (same
+  /// instance, so the [playlist] setter never ran): bumps the revision so the
+  /// UI rebuilds and re-scans for missing files.
+  void refreshPlaylist() {
+    playlistRevision.value++;
+    _validateTracks();
   }
 
   String get playlistName => playlist.name;
@@ -173,7 +183,7 @@ class AudioPlayerManager {
   void _handleTrackComplete() {
     if (playlist.loopMode.value == LoopMode.one) {
       _loadTrack();
-      play();
+      play(fade: false); // seamless repeat: no fade-in on every loop
       return;
     }
     if (playlist.nextTrack()) {
@@ -415,9 +425,16 @@ class AudioPlayerManager {
   Future<void> playEffect(Soundtrack track) async {
     final player = _acquireEffectPlayer();
     _busyEffects.add(player);
-    await player.setReleaseMode(ReleaseMode.release);
-    await player.setVolume((_targetVolume * track.volume).clamp(0.0, 1.0));
-    await player.play(DeviceFileSource(track.source));
+    try {
+      await player.setReleaseMode(ReleaseMode.release);
+      await player.setVolume((_targetVolume * track.volume).clamp(0.0, 1.0));
+      await player.play(DeviceFileSource(track.source));
+    } catch (e) {
+      // Triggers are not awaited by the UI: a missing/unreadable file must not
+      // become an unhandled async error.
+      debugPrint('playEffect failed for "${track.source}": $e');
+      _busyEffects.remove(player);
+    }
   }
 
   /// Starts an effect looping (for press-and-hold). Returns the player so the
@@ -426,9 +443,15 @@ class AudioPlayerManager {
     final player = _acquireEffectPlayer();
     _busyEffects.add(player);
     _heldLoops.add(player);
-    await player.setReleaseMode(ReleaseMode.loop);
-    await player.setVolume((_targetVolume * track.volume).clamp(0.0, 1.0));
-    await player.play(DeviceFileSource(track.source));
+    try {
+      await player.setReleaseMode(ReleaseMode.loop);
+      await player.setVolume((_targetVolume * track.volume).clamp(0.0, 1.0));
+      await player.play(DeviceFileSource(track.source));
+    } catch (e) {
+      debugPrint('startLoopEffect failed for "${track.source}": $e');
+      _busyEffects.remove(player);
+      _heldLoops.remove(player);
+    }
     return player;
   }
 
@@ -494,6 +517,10 @@ class AudioPlayerManager {
   /// restart from the beginning after a pause).
   Future<void> resume({bool fade = true}) async {
     if (_path.value == null) return;
+    // A stopped/completed player has released its source: "resuming" it would
+    // flip the UI to playing without producing any sound (e.g. "Play all" right
+    // after launch). Restart playback properly instead.
+    if (!isPause) return play(fade: fade, short: true);
     final useFade = fade && fadeEnabled.value;
     final player = _active;
     // Always set the starting volume explicitly: after a faded pause the player

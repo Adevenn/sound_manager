@@ -78,6 +78,24 @@ void main() {
       expect(pl.trackIndex.value, 2);
     });
 
+    test('removeTrack before the current one keeps the selection', () {
+      final pl = _playlistOf(3);
+      pl.changeTrack(2);
+      final selected = pl.actualSoundtrack;
+      pl.removeTrack(0);
+      expect(pl.actualSoundtrack, same(selected));
+      expect(pl.trackIndex.value, 1);
+    });
+
+    test('removeTrack after the current one keeps the selection', () {
+      final pl = _playlistOf(3);
+      pl.changeTrack(1);
+      final selected = pl.actualSoundtrack;
+      pl.removeTrack(2);
+      expect(pl.actualSoundtrack, same(selected));
+      expect(pl.trackIndex.value, 1);
+    });
+
     test('actualSoundtrack clamps a stale index', () {
       final pl = _playlistOf(3);
       pl.changeTrack(2);

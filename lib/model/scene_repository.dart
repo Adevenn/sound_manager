@@ -24,9 +24,16 @@ class SceneManager {
     }
   }
 
+  /// Atomic write (temp file + rename) so a crash mid-write can never corrupt
+  /// the whole scene collection.
   static Future<void> _saveAll(List<Scene> scenes) async {
     final file = await _file();
-    await file.writeAsString(jsonEncode(scenes.map((s) => s.toJson()).toList()));
+    final tmp = File('${file.path}.tmp');
+    await tmp.writeAsString(
+      jsonEncode(scenes.map((s) => s.toJson()).toList()),
+      flush: true,
+    );
+    await tmp.rename(file.path);
   }
 
   /// Adds [scene], replacing any existing scene with the same name.

@@ -146,7 +146,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   current: shortcuts.effectKeys[i],
                   onRebind: () async {
                     final key = await _captureKey();
-                    if (key != null) shortcuts.setEffectKey(i, key);
+                    if (key == null) return;
+                    if (!shortcuts.setEffectKey(i, key) && context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'This key is already used by Play / Pause all',
+                          ),
+                        ),
+                      );
+                    }
                   },
                   onClear: () => shortcuts.setEffectKey(i, null),
                 ),

@@ -34,7 +34,8 @@ class Soundtrack {
   }) : id = uuid.v4();
 
   Soundtrack.fromJson(Map<String, dynamic> json)
-    : id = json['id'],
+    // Files written before ids existed: generate one instead of crashing.
+    : id = json['id'] ?? uuid.v4(),
       source = json['source'],
       type = SoundtrackType.byName(json['type']),
       volume = (json['volume'] as num?)?.toDouble() ?? 1.0,

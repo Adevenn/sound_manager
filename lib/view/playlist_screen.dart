@@ -29,7 +29,18 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
   Future<void> _initSettings() async {
     var path = UserSettings.getPlayerSourceDirectory(player.type);
     directory.value = path == null ? null : Directory(path);
-    await _scanMissing();
+    await Future.wait([_scanMissing(), _scanDirectory()]);
+  }
+
+  /// Drag-over highlight of the playlist drop zone. A state field (not rebuilt
+  /// on every build) so it survives rebuilds and can be disposed.
+  final ValueNotifier<bool> _dropHover = ValueNotifier(false);
+
+  @override
+  void dispose() {
+    directory.dispose();
+    _dropHover.dispose();
+    super.dispose();
   }
 
   /// Sources in the working playlist whose file is missing on disk, refreshed
@@ -72,6 +83,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
             ],
           ),
     );
+    controller.dispose();
     if (name == null || name.isEmpty) return;
     await PlaylistRepository.saveAs(playlist, name);
     await UserSettings.setCurrentPlaylist(player.type, name);
@@ -160,31 +172,50 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
     if (directoryPath != null) {
       directory.value = Directory(directoryPath);
       UserSettings.setPlayerSourceDirectory(player.type, directoryPath);
+      await _scanDirectory();
     }
   }
 
-  // Cache the directory scan so it does not hit the disk synchronously on every
-  // rebuild (the getter is read from build()). Recomputed only when the
-  // directory changes.
-  String? _cachedDirPath;
-  List<String> _cachedTrackPaths = [];
+  /// Audio files found in the source directory, sorted by name. Refreshed
+  /// asynchronously (off the build path) when the directory changes or on
+  /// explicit refresh, so a large folder never janks the UI.
+  List<String> _trackPaths = [];
 
-  List<String> _getTrackPaths() {
+  static const Set<String> _audioExtensions = {
+    '.mp3',
+    '.wav',
+    '.ogg',
+    '.flac',
+    '.m4a',
+    '.aac',
+  };
+
+  Future<void> _scanDirectory() async {
     final dir = directory.value;
-    if (dir == null) return [];
-    if (dir.path == _cachedDirPath) return _cachedTrackPaths;
-    final list = <String>[];
-    for (var f in dir.listSync()) {
-      final ext = p.extension(f.path).toLowerCase();
-      if (ext == '.mp3' || ext == '.wav') list.add(f.path);
+    final paths = <String>[];
+    if (dir != null) {
+      try {
+        await for (final f in dir.list()) {
+          if (f is File &&
+              _audioExtensions.contains(p.extension(f.path).toLowerCase())) {
+            paths.add(f.path);
+          }
+        }
+      } catch (_) {
+        // Directory deleted/unmounted since it was saved: show it empty.
+      }
+      paths.sort(
+        (a, b) => p
+            .basename(a)
+            .toLowerCase()
+            .compareTo(p.basename(b).toLowerCase()),
+      );
     }
-    _cachedDirPath = dir.path;
-    _cachedTrackPaths = list;
-    return list;
+    if (mounted) setState(() => _trackPaths = paths);
   }
 
   Widget get _directoryContent {
-    var files = _getTrackPaths();
+    var files = _trackPaths;
     return Expanded(
       child: ListView.separated(
         itemCount: files.length,
@@ -233,7 +264,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
 
   Widget get _playlistContent => Expanded(
     child: () {
-      var isHover = ValueNotifier<bool>(false);
+      final isHover = _dropHover;
       return DragTarget<String>(
         onWillAcceptWithDetails: (i) => isHover.value = true,
         onLeave: (i) => isHover.value = false,
@@ -400,7 +431,25 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
     builder: (context, snapshot) {
       if (snapshot.connectionState == ConnectionState.done ||
           snapshot.hasData) {
-        return Scaffold(
+        // The editor is shown as a dialog: Escape would normally pop it with a
+        // null result and silently discard a playlist loaded inside the editor.
+        // Intercept every pop so the working playlist is always returned.
+        return PopScope(
+          canPop: false,
+          onPopInvokedWithResult: (didPop, result) {
+            if (!didPop) Navigator.of(context).pop(playlist);
+          },
+          child: _buildEditor(context),
+        );
+      } else if (snapshot.connectionState == ConnectionState.done &&
+          snapshot.hasError) {
+        return Center(child: Text('An error occurred'));
+      }
+      return LoadingScreen();
+    },
+  );
+
+  Widget _buildEditor(BuildContext context) => Scaffold(
           appBar: AppBar(
             leading: IconButton(
               onPressed: () => Navigator.of(context).pop(playlist),
@@ -469,16 +518,25 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
                                     onPressed: () => _pickDirectory(),
                                     child: Icon(Icons.folder_rounded),
                                   ),
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8.0,
+                                  Expanded(
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8.0,
+                                      ),
+                                      child: Text(
+                                        dir != null
+                                            ? p.basename(dir.path)
+                                            : 'Select a directory',
+                                        style: TextStyle(fontSize: 20),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
                                     ),
-                                    child: Text(
-                                      dir != null
-                                          ? p.basename(dir.path)
-                                          : 'Select a directory',
-                                      style: TextStyle(fontSize: 20),
-                                    ),
+                                  ),
+                                  IconButton(
+                                    tooltip: 'Refresh',
+                                    icon: const Icon(Icons.refresh_rounded),
+                                    onPressed:
+                                        dir == null ? null : _scanDirectory,
                                   ),
                                 ],
                               ),
@@ -500,11 +558,4 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
             ),
           ),
         );
-      } else if (snapshot.connectionState == ConnectionState.done &&
-          snapshot.hasError) {
-        return Center(child: Text('An error occurred'));
-      }
-      return LoadingScreen();
-    },
-  );
 }

@@ -124,17 +124,19 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
                                 thumbColor: _accent,
                               ),
                               child: Slider(
-                                onChanged: (value) {
-                                  final position =
-                                      value * duration.inMilliseconds;
-                                  player.seek(position);
-                                },
+                                // Disabled until a real duration is known
+                                // (also avoids seeking into nothing).
+                                onChanged:
+                                    duration.inMilliseconds > 0
+                                        ? (value) => player.seek(
+                                          value * duration.inMilliseconds,
+                                        )
+                                        : null,
                                 value:
-                                    (position.inMilliseconds > 0 &&
-                                            position.inMilliseconds <
+                                    duration.inMilliseconds > 0
+                                        ? (position.inMilliseconds /
                                                 duration.inMilliseconds)
-                                        ? position.inMilliseconds /
-                                            duration.inMilliseconds
+                                            .clamp(0.0, 1.0)
                                         : 0.0,
                               ),
                             ),

@@ -12,8 +12,14 @@ import 'package:sound_manager/model/playlist.dart';
 class PlaylistRepository {
   PlaylistRepository._();
 
-  static Future<File> _fileFor(String name) async =>
-      File(p.join((await AppDirectories.playlists()).path, '$name.json'));
+  /// Strips characters that are forbidden in file names (notably on Windows:
+  /// `\ / : * ? " < > |`) so any user-typed playlist name can be saved.
+  static String _safeFileName(String name) =>
+      name.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_').trim();
+
+  static Future<File> _fileFor(String name) async => File(
+    p.join((await AppDirectories.playlists()).path, '${_safeFileName(name)}.json'),
+  );
 
   /// Loads the playlist stored under [name]. Throws if the file is missing or
   /// malformed, so callers can fall back to an empty playlist.
@@ -23,10 +29,13 @@ class PlaylistRepository {
     return Playlist.fromJson(json);
   }
 
-  /// Writes [playlist] to `<playlist.name>.json`.
+  /// Writes [playlist] to `<playlist.name>.json`. The write is atomic (temp
+  /// file + rename) so a crash mid-write can never corrupt an existing file.
   static Future<void> save(Playlist playlist) async {
     final file = await _fileFor(playlist.name);
-    await file.writeAsString(jsonEncode(playlist.toJson()));
+    final tmp = File('${file.path}.tmp');
+    await tmp.writeAsString(jsonEncode(playlist.toJson()), flush: true);
+    await tmp.rename(file.path);
   }
 
   /// Renames [playlist] to [newName] and saves it under the new file name
